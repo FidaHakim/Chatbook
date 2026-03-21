@@ -1,0 +1,393 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chatbook | Pro Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+    <style>
+        :root { --blue: #1877f2; --bg: #f0f2f5; --gr: #65676b; --border: #dddfe2; --gold: #ffc107; --orange: #fb8c00; --green: #42b72a; }
+        * { box-sizing: border-box; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); margin: 0; padding-bottom: 70px; color: #1c1e21; }
+
+        /* Auth UI */
+        #authLayer { position: fixed; inset: 0; background: var(--bg); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .auth-card { background: white; padding: 30px; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); text-align: center; }
+
+        /* Navigation */
+        header { background: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid var(--border); }
+        .search-box { background: white; padding: 10px; display: none; border-bottom: 1px solid var(--border); }
+        .search-box.active { display: block; }
+        .tabs { background: white; display: flex; border-bottom: 1px solid var(--border); position: sticky; top: 52px; z-index: 999; }
+        .tab { flex: 1; padding: 12px; text-align: center; color: var(--gr); cursor: pointer; }
+        .t-on { color: var(--blue); border-bottom: 3px solid var(--blue); }
+        .t-on span { font-variation-settings: 'FILL' 1; }
+
+        /* Main Components */
+        .view { display: none; padding: 12px; max-width: 550px; margin: 0 auto; min-height: 100vh; }
+        .v-on { display: block; animation: fadeIn 0.3s ease; }
+        .card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
+       
+        /* Post Content */
+        .p-img { width: calc(100% + 24px); margin-left: -12px; max-height: 450px; object-fit: cover; margin-top: 10px; }
+        .actions { display: flex; border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; }
+        .act-btn { flex: 1; text-align: center; padding: 8px; color: var(--gr); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .act-btn.liked { color: var(--blue); }
+        .act-btn.liked span { font-variation-settings: 'FILL' 1; }
+
+        /* Profile Styles */
+        .cover { width: 100%; height: 140px; background: linear-gradient(to right, #1877f2, #2e7d32); }
+        .p-avatar-box { text-align: center; margin-top: -60px; padding-bottom: 15px; background: white; border-bottom: 1px solid var(--border); }
+        .p-avatar { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; object-fit: cover; background: white; }
+        .avatar-wrapper { position: relative; width: 120px; margin: 0 auto; }
+        .cam-btn { position: absolute; bottom: 5px; right: 5px; background: var(--blue); color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 2px solid white; cursor: pointer; }
+        .meta-info { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 10px; color: var(--gr); font-size: 14px; }
+        .meta-item { display: flex; align-items: center; gap: 5px; }
+
+        /* Comments */
+        .comment-sec { background: #f9f9f9; padding: 10px; border-top: 1px solid #eee; display: none; margin: 0 -12px -12px -12px; }
+        .comment-sec.active { display: block; }
+        .c-item { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-start; }
+        .c-bubble { background: #e4e6eb; padding: 6px 12px; border-radius: 15px; font-size: 13px; max-width: 85%; }
+
+        /* Form Elements */
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: #f5f6f7; margin-bottom: 10px; outline: none; }
+        .btn { background: var(--blue); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .btn-sec { background: #e4e6eb; color: #050505; }
+       
+        .v-blue { color: var(--blue); font-size: 16px; font-variation-settings: 'FILL' 1; }
+        .v-green { color: var(--green); font-size: 16px; font-variation-settings: 'FILL' 1; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="authLayer">
+    <div class="auth-card">
+        <h1 style="color:var(--blue); font-size:42px; margin:0; letter-spacing:-2px;">chatbook</h1>
+        <div id="loginUI">
+            <input type="email" id="lEmail" placeholder="Email">
+            <input type="password" id="lPass" placeholder="Password">
+            <button class="btn" onclick="doLogin()">Log In</button>
+            <hr style="opacity:0.1; margin:20px 0;">
+            <button class="btn" style="background:#42b72a; width:auto; margin:0 auto;" onclick="toggleAuth(true)">Create New Account</button>
+        </div>
+        <div id="regUI" style="display:none;">
+            <h3>Join Chatbook</h3>
+            <input type="text" id="rName" placeholder="Full Name">
+            <input type="email" id="rEmail" placeholder="Email">
+            <input type="password" id="rPass" placeholder="Password">
+            <input type="text" id="rEdu" placeholder="Education">
+            <div style="display:flex; gap:5px;">
+                <input type="date" id="rBirth" style="flex:1">
+                <select id="rSex" style="flex:1"><option>Male</option><option>Female</option></select>
+            </div>
+            <button class="btn" onclick="doSignup()">Sign Up</button>
+            <p style="color:var(--blue); cursor:pointer; font-size:14px;" onclick="toggleAuth(false)">Back to Login</p>
+        </div>
+    </div>
+</div>
+
+<div id="mainApp" style="display:none;">
+    <header>
+        <h2 style="color:var(--blue); margin:0; letter-spacing:-1px;">chatbook</h2>
+        <div style="display:flex; gap:10px;">
+            <span class="material-symbols-outlined" style="background:#eee; padding:8px; border-radius:50%; cursor:pointer;" onclick="toggleSearch()">search</span>
+            <span class="material-symbols-outlined" style="background:#eee; padding:8px; border-radius:50%; cursor:pointer;" onclick="location.reload()">logout</span>
+        </div>
+    </header>
+
+    <div id="sBox" class="search-box">
+        <input type="text" id="sQuery" placeholder="Search people or posts..." oninput="runSearch()">
+    </div>
+
+    <div class="tabs">
+        <div class="tab t-on" onclick="go('v-feed',this)"><span class="material-symbols-outlined">home</span></div>
+        <div class="tab" onclick="go('v-ppl',this)"><span class="material-symbols-outlined">group</span></div>
+        <div class="tab" id="tab-profile" onclick="openProfile(curUser.id, this)"><span class="material-symbols-outlined">account_circle</span></div>
+    </div>
+
+    <div id="v-feed" class="view v-on">
+        <div class="card">
+            <textarea id="postTxt" placeholder="What's on your mind?"></textarea>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input type="file" id="postImg" accept="image/*" style="flex:2; font-size:12px; margin-bottom:0;">
+                <select id="postPriv" style="flex:1; margin-bottom:0;">
+                    <option value="public">Public</option>
+                    <option value="private">Only Me</option>
+                </select>
+            </div>
+            <button class="btn" onclick="uploadPost()">Post</button>
+        </div>
+        <div id="feed-data"></div>
+    </div>
+
+    <div id="v-ppl" class="view">
+        <h3 style="margin-left:5px; margin-top:0;">Discover People</h3>
+        <div id="people-list"></div>
+    </div>
+
+    <div id="v-me" class="view" style="padding:0;">
+        <div class="cover"></div>
+        <div class="p-avatar-box">
+            <div class="avatar-wrapper">
+                <img id="uAv" class="p-avatar" src="">
+                <label for="pUp" class="cam-btn" id="upBtn" style="display:none;">
+                    <span class="material-symbols-outlined" style="font-size:18px;">photo_camera</span>
+                </label>
+                <input type="file" id="pUp" hidden accept="image/*" onchange="changeAv(this)">
+            </div>
+            <h2 id="uName" style="margin:5px 0 0 0; display:flex; align-items:center; justify-content:center; gap:5px;"></h2>
+           
+            <div id="uMeta" class="meta-info"></div>
+
+            <div id="profileActions" style="padding:10px 15px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                <button id="editBioBtn" class="btn btn-sec" style="width:auto; display:none;" onclick="editBio()">Edit Bio</button>
+                <button id="applyBtn" class="btn" style="background:var(--green); width:auto; display:none;" onclick="applyV()">Apply for Tick</button>
+                <button id="friendBtn" class="btn" style="width:auto; display:none;" onclick="handleFriend()">Add Friend</button>
+                <button id="followBtn" class="btn btn-sec" style="width:auto; display:none;" onclick="handleFollow()">Follow</button>
+            </div>
+           
+            <div id="uStats" style="display:flex; justify-content:center; gap:20px; font-size:14px; margin-top:5px; padding-bottom:10px; border-bottom:1px solid var(--border);">
+                <div><b id="statFol">0</b> Followers</div>
+                <div><b id="statFing">0</b> Following</div>
+                <div><b id="statFr">0</b> Friends</div>
+            </div>
+
+            <p id="uBio" style="color:var(--gr); padding:0 20px; font-size:14px; margin-top:10px;"></p>
+        </div>
+        <div id="uPosts" style="padding:12px;"></div>
+    </div>
+</div>
+
+<script>
+    const cfg = { apiKey: "AIzaSyBO0D2WarLVknFLMwW6iKsPUYGZbgEsJLo", projectId: "chatbook-78d49" };
+    if (!firebase.apps.length) { firebase.initializeApp(cfg); }
+    const db = firebase.firestore();
+
+    let curUser = null; let allPosts = []; let allUsers = []; let viewingId = null;
+    let searchQuery = "";
+
+    function fmtTime(ts) {
+        if(!ts) return "Recently";
+        const diff = Math.floor((Date.now() - ts) / 1000);
+        if (diff < 60) return "Just now";
+        if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+        if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+        return new Date(ts).toLocaleDateString();
+    }
+
+    function getTick(u) {
+        if(u.n.toLowerCase() === 'fidahakim') return `<span class="material-symbols-outlined v-blue">verified</span>`;
+        if(u.verified === 'green') return `<span class="material-symbols-outlined v-green">verified</span>`;
+        return "";
+    }
+
+    async function doLogin() {
+        const e = document.getElementById('lEmail').value, p = document.getElementById('lPass').value;
+        const s = await db.collection("users").where("e","==",e).where("p","==",p).get();
+        if(!s.empty) {
+            curUser = { id: s.docs[0].id, ...s.docs[0].data() };
+            document.getElementById('authLayer').style.display='none';
+            document.getElementById('mainApp').style.display='block';
+            sync();
+        } else alert("Invalid Login");
+    }
+
+    async function doSignup() {
+        const u = {
+            n: document.getElementById('rName').value, e: document.getElementById('rEmail').value, p: document.getElementById('rPass').value, edu: document.getElementById('rEdu').value, birth: document.getElementById('rBirth').value, sex: document.getElementById('rSex').value, verified: "none", av: "https://i.pravatar.cc/150", bio: "Available", ts: Date.now(),
+            friends: [], friendReqsSent: [], friendReqsRecv: [], followers: [], following: []
+        };
+        await db.collection("users").add(u);
+        location.reload();
+    }
+
+    function sync() {
+        db.collection("posts").orderBy("ts","desc").onSnapshot(s => {
+            allPosts = s.docs.map(d => ({id: d.id, ...d.data()}));
+            renderFeed(allPosts);
+            if(viewingId) openProfile(viewingId);
+        });
+        db.collection("users").onSnapshot(s => {
+            allUsers = s.docs.map(d => ({id: d.id, ...d.data()}));
+            if(curUser) curUser = allUsers.find(u => u.id === curUser.id);
+            if(curUser) renderPeople(allUsers);
+            if(viewingId) openProfile(viewingId);
+        });
+    }
+
+    function toggleSearch() {
+        const sb = document.getElementById('sBox');
+        sb.classList.toggle('active');
+        if(!sb.classList.contains('active')) {
+            document.getElementById('sQuery').value = "";
+            runSearch();
+        }
+    }
+
+    function runSearch() {
+        searchQuery = document.getElementById('sQuery').value.toLowerCase();
+        renderFeed(allPosts);
+        renderPeople(allUsers);
+    }
+
+    function renderFeed(data) {
+        const feed = data.filter(p =>
+            (p.priv === 'public' || p.uid === curUser.id) &&
+            (p.text.toLowerCase().includes(searchQuery) || p.u.toLowerCase().includes(searchQuery))
+        );
+
+        document.getElementById('feed-data').innerHTML = feed.map(p => {
+            const author = allUsers.find(u => u.id === p.uid) || { n: p.u, av: p.av };
+            const likes = p.likes || [];
+            const comms = p.comments || [];
+            const isMyPost = p.uid === curUser.id;
+
+            return `
+            <div class="card">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <img src="${author.av}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))">
+                    <div style="flex:1">
+                        <b onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="display:inline-flex; align-items:center; gap:3px; cursor:pointer;">${author.n}${getTick(author)}</b>
+                        <div style="font-size:11px; color:var(--gr)">${fmtTime(p.ts)} • ${p.priv === 'private' ? 'Only me' : 'Public'}</div>
+                    </div>
+                    ${isMyPost ? `<span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer;" onclick="deletePost('${p.id}')">more_horiz</span>` : ''}
+                </div>
+                <p style="margin:10px 0;">${p.text}</p>
+                ${p.img ? `<img src="${p.img}" class="p-img">` : ''}
+               
+                ${likes.length > 0 ? `<div style="font-size:13px; color:var(--gr); margin-top:10px;">${likes.length} Likes</div>` : ''}
+
+                <div class="actions">
+                    <div class="act-btn ${likes.includes(curUser.id)?'liked':''}" onclick="toggleLike('${p.id}')">
+                        <span class="material-symbols-outlined">thumb_up</span> Like
+                    </div>
+                    <div class="act-btn" onclick="toggleComms('${p.id}')">
+                        <span class="material-symbols-outlined">chat_bubble</span> Comment (${comms.length})
+                    </div>
+                </div>
+                <div id="cBox-${p.id}" class="comment-sec">
+                    <div id="cList-${p.id}">${comms.map(c => `<div class="c-item"><img src="${c.av}" style="width:25px;height:25px;border-radius:50%"><div class="c-bubble"><b>${c.u}</b> ${c.text}</div></div>`).join('')}</div>
+                    <div style="display:flex; gap:5px; margin-top:5px;">
+                        <input id="ci-${p.id}" placeholder="Write a comment..." style="margin:0; font-size:12px;">
+                        <button class="btn" style="width:auto; padding:0 10px;" onclick="addComm('${p.id}')">Send</button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderPeople(data) {
+        if(!curUser) return;
+        const others = data.filter(u => u.id !== curUser.id && u.n.toLowerCase().includes(searchQuery));
+        document.getElementById('people-list').innerHTML = others.map(u => {
+            return `
+            <div class="card" style="display:flex; align-items:center; gap:10px; padding:10px;">
+                <img src="${u.av}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">
+                <div style="flex:1;">
+                    <b style="cursor:pointer;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">${u.n}${getTick(u)}</b>
+                    <div style="font-size:12px; color:var(--gr); margin-bottom:5px;">${u.edu || 'National University'}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function deletePost(pid) {
+        if(confirm("Delete this post permanently?")) {
+            await db.collection("posts").doc(pid).delete();
+        }
+    }
+
+    async function editBio() {
+        const b = prompt("Update your bio:", curUser.bio);
+        if(b !== null) {
+            await db.collection("users").doc(curUser.id).update({ bio: b });
+            curUser.bio = b;
+            openProfile(curUser.id);
+        }
+    }
+
+    async function uploadPost() {
+        const t = document.getElementById('postTxt').value, f = document.getElementById('postImg').files[0];
+        if(!t && !f) return;
+        const img = f ? await new Promise(res => { const r = new FileReader(); r.readAsDataURL(f); r.onload=()=>res(r.result); }) : null;
+        await db.collection("posts").add({ uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: img, priv: document.getElementById('postPriv').value, likes: [], comments: [], ts: Date.now() });
+        document.getElementById('postTxt').value = "";
+    }
+
+    async function toggleLike(id) {
+        const p = allPosts.find(x => x.id === id);
+        const action = p.likes.includes(curUser.id) ? firebase.firestore.FieldValue.arrayRemove(curUser.id) : firebase.firestore.FieldValue.arrayUnion(curUser.id);
+        await db.collection("posts").doc(id).update({ likes: action });
+    }
+
+    async function addComm(id) {
+        const inp = document.getElementById(`ci-${id}`); if(!inp.value) return;
+        const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() };
+        await db.collection("posts").doc(id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c) });
+        inp.value = "";
+    }
+
+    function openProfile(uid, el) {
+        const u = allUsers.find(x => x.id === uid) || curUser;
+        viewingId = uid;
+        if(el) go('v-me', el);
+       
+        document.getElementById('uName').innerHTML = `${u.n}${getTick(u)}`;
+        document.getElementById('uAv').src = u.av;
+        document.getElementById('uBio').innerText = u.bio;
+        document.getElementById('uMeta').innerHTML = `
+            <div class="meta-item"><span class="material-symbols-outlined" style="font-size:16px;">school</span> ${u.edu || 'National University'}</div>
+            <div class="meta-item"><span class="material-symbols-outlined" style="font-size:16px;">person</span> ${u.sex || 'Not specified'}</div>
+        `;
+       
+        document.getElementById('statFol').innerText = (u.followers || []).length;
+        document.getElementById('statFing').innerText = (u.following || []).length;
+        document.getElementById('statFr').innerText = (u.friends || []).length;
+
+        const isMe = uid === curUser.id;
+        document.getElementById('upBtn').style.display = isMe ? 'flex' : 'none';
+        document.getElementById('editBioBtn').style.display = isMe ? 'block' : 'none';
+        document.getElementById('applyBtn').style.display = (isMe && u.verified === 'none') ? 'block' : 'none';
+
+        const myPosts = allPosts.filter(p => p.uid === uid && (p.priv === 'public' || uid === curUser.id));
+        document.getElementById('uPosts').innerHTML = myPosts.map(p => `
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:11px; color:var(--gr);">${fmtTime(p.ts)}</div>
+                    ${isMe ? `<span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer; font-size:18px;" onclick="deletePost('${p.id}')">delete</span>` : ''}
+                </div>
+                <p style="margin-top:8px;">${p.text}</p>
+                ${p.img?`<img src="${p.img}" class="p-img">`:''}
+            </div>`).join('');
+    }
+
+    async function changeAv(input) {
+        const file = input.files[0]; if(!file) return;
+        const base64 = await new Promise(res => { const r = new FileReader(); r.readAsDataURL(file); r.onload=()=>res(r.result); });
+        await db.collection("users").doc(curUser.id).update({ av: base64 });
+        curUser.av = base64;
+        openProfile(curUser.id);
+    }
+
+    function toggleAuth(s) {
+        document.getElementById('loginUI').style.display = s ? 'none' : 'block';
+        document.getElementById('regUI').style.display = s ? 'block' : 'none';
+    }
+
+    function toggleComms(id) { document.getElementById(`cBox-${id}`).classList.toggle('active'); }
+   
+    function go(id, el) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('v-on'));
+        document.getElementById(id).classList.add('v-on');
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('t-on'));
+        el.classList.add('t-on');
+    }
+</script>
+</body>
+</html>

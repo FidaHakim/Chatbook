@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
     <style>
-        :root { --blue: #1877f2; --bg: #f0f2f5; --gr: #65676b; --border: #dddfe2; --gold: #ffc107; --orange: #fb8c00; --green: #42b72a; }
+        :root { --blue: #1877f2; --bg: #f0f2f5; --gr: #65676b; --border: #dddfe2; --gold: #ffc107; --orange: #fb8c00; --green: #42b72a; --red: #fa3e3e; }
         * { box-sizing: border-box; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
         body { background: var(--bg); margin: 0; padding-bottom: 70px; color: #1c1e21; }
 
@@ -26,45 +26,91 @@
         .t-on { color: var(--blue); border-bottom: 3px solid var(--blue); }
         .t-on span { font-variation-settings: 'FILL' 1; }
 
+        /* Stories Section */
+        .stories-container { display: flex; gap: 10px; overflow-x: auto; padding: 5px 0 15px 0; scrollbar-width: none; }
+        .stories-container::-webkit-scrollbar { display: none; }
+        .story-card { min-width: 100px; height: 160px; border-radius: 10px; background: #eee; position: relative; overflow: hidden; cursor: pointer; border: 1px solid #ddd; }
+        .story-img { width: 100%; height: 100%; object-fit: cover; transition: 0.3s; }
+        .story-card:hover .story-img { transform: scale(1.05); }
+        .story-owner-av { position: absolute; top: 8px; left: 8px; width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--blue); object-fit: cover; z-index: 2; }
+        .story-name { position: absolute; bottom: 8px; left: 8px; right: 8px; color: white; font-size: 11px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.8); z-index: 2; }
+        .create-story { background: white; }
+        .plus-icon { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--blue); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 3px solid white; }
+
         /* Main Components */
         .view { display: none; padding: 12px; max-width: 550px; margin: 0 auto; min-height: 100vh; }
         .v-on { display: block; animation: fadeIn 0.3s ease; }
         .card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
        
         /* Post Content */
-        .p-img { width: calc(100% + 24px); margin-left: -12px; max-height: 450px; object-fit: cover; margin-top: 10px; }
-        .actions { display: flex; border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; }
+        .p-img { width: calc(100% + 24px); margin-left: -12px; max-height: 450px; object-fit: cover; margin-top: 10px; display: block; cursor: zoom-in; }
+        .actions { display: flex; border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; position: relative; }
         .act-btn { flex: 1; text-align: center; padding: 8px; color: var(--gr); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        .act-btn.liked { color: var(--blue); }
-        .act-btn.liked span { font-variation-settings: 'FILL' 1; }
+       
+        /* Reactions Bar */
+        .react-bar { position: absolute; bottom: 45px; left: 10px; background: white; padding: 5px 10px; border-radius: 30px; display: none; gap: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 10; animation: reactPop 0.2s ease-out; }
+        .act-btn:hover .react-bar, .act-btn:active .react-bar { display: flex; }
+        .re-btn { font-size: 22px; transition: transform 0.2s; cursor: pointer; }
+        .re-btn:hover { transform: scale(1.3); }
+
+        .comment-sec { display: none; padding-top: 10px; border-top: 1px solid #eee; }
+        .comment-sec.active { display: block; }
+        .c-item { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+        .c-bubble { background: #f0f2f5; padding: 8px 12px; border-radius: 18px; font-size: 13px; }
 
         /* Profile Styles */
         .cover { width: 100%; height: 140px; background: linear-gradient(to right, #1877f2, #2e7d32); }
         .p-avatar-box { text-align: center; margin-top: -60px; padding-bottom: 15px; background: white; border-bottom: 1px solid var(--border); }
-        .p-avatar { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; object-fit: cover; background: white; }
+        .p-avatar { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; object-fit: cover; background: white; cursor: zoom-in; }
         .avatar-wrapper { position: relative; width: 120px; margin: 0 auto; }
         .cam-btn { position: absolute; bottom: 5px; right: 5px; background: var(--blue); color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 2px solid white; cursor: pointer; }
-        .meta-info { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 10px; color: var(--gr); font-size: 14px; }
-        .meta-item { display: flex; align-items: center; gap: 5px; }
+       
+        #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 11000; display: none; align-items: center; justify-content: center; padding: 20px; }
+        #lightbox img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
+        #lightbox .close-lb { position: absolute; top: 20px; right: 20px; color: white; cursor: pointer; font-size: 30px; }
 
-        /* Comments */
-        .comment-sec { background: #f9f9f9; padding: 10px; border-top: 1px solid #eee; display: none; margin: 0 -12px -12px -12px; }
-        .comment-sec.active { display: block; }
-        .c-item { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-start; }
-        .c-bubble { background: #e4e6eb; padding: 6px 12px; border-radius: 15px; font-size: 13px; max-width: 85%; }
-
-        /* Form Elements */
         input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: #f5f6f7; margin-bottom: 10px; outline: none; }
         .btn { background: var(--blue); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        .btn-sec { background: #e4e6eb; color: #050505; }
-       
-        .v-blue { color: var(--blue); font-size: 16px; font-variation-settings: 'FILL' 1; }
-        .v-green { color: var(--green); font-size: 16px; font-variation-settings: 'FILL' 1; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+        /* Edit Modal */
+        #editModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; }
+        .modal-card { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 400px; }
+
+        @keyframes reactPop { from { opacity: 0; transform: translateY(10px) scale(0.8); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
     </style>
 </head>
 <body>
+
+<div id="lightbox" onclick="this.style.display='none'">
+    <span class="material-symbols-outlined close-lb">close</span>
+    <img id="lbImg" src="">
+</div>
+
+<div id="editModal">
+    <div class="modal-card">
+        <h3>Edit Details</h3>
+        <label style="font-size:12px; color:var(--gr)">Bio</label>
+        <input type="text" id="eBio">
+        <label style="font-size:12px; color:var(--gr)">Education</label>
+        <input type="text" id="eEdu">
+        <label style="font-size:12px; color:var(--gr)">Work / Company</label>
+        <input type="text" id="eWork">
+        <label style="font-size:12px; color:var(--gr)">Relationship Status</label>
+        <select id="eStatus">
+            <option value="Single">Single</option>
+            <option value="In a relationship">In a relationship</option>
+            <option value="Married">Married</option>
+            <option value="Engaged">Engaged</option>
+            <option value="It's complicated">It's complicated</option>
+        </select>
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn" style="background:#e4e6eb; color:black;" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+            <button class="btn" onclick="saveProfile()">Save Changes</button>
+        </div>
+    </div>
+</div>
 
 <div id="authLayer">
     <div class="auth-card">
@@ -82,6 +128,12 @@
             <input type="email" id="rEmail" placeholder="Email">
             <input type="password" id="rPass" placeholder="Password">
             <input type="text" id="rEdu" placeholder="Education">
+            <input type="text" id="rWork" placeholder="Work / Club Information">
+            <select id="rStatus" style="margin-bottom:10px;">
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+                <option value="In a relationship">In a relationship</option>
+            </select>
             <div style="display:flex; gap:5px;">
                 <input type="date" id="rBirth" style="flex:1">
                 <select id="rSex" style="flex:1"><option>Male</option><option>Female</option></select>
@@ -112,16 +164,24 @@
     </div>
 
     <div id="v-feed" class="view v-on">
+        <div class="stories-container" id="stories-data"></div>
+
         <div class="card">
-            <textarea id="postTxt" placeholder="What's on your mind?"></textarea>
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="file" id="postImg" accept="image/*" style="flex:2; font-size:12px; margin-bottom:0;">
+            <div style="display:flex; gap:10px; margin-bottom:10px; align-items: center;">
+                <img id="postBoxAv" src="" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
+                <textarea id="postTxt" placeholder="What's on your mind?" style="margin:0;"></textarea>
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom:10px; align-items: center;">
+                <label style="flex:1; background:#f0f2f5; padding:8px; border-radius:6px; font-size:12px; cursor:pointer; text-align:center; border:1px solid #ddd;">
+                    <span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle;">image</span> Add Photo
+                    <input type="file" id="postImg" accept="image/*" hidden>
+                </label>
                 <select id="postPriv" style="flex:1; margin-bottom:0;">
                     <option value="public">Public</option>
                     <option value="private">Only Me</option>
                 </select>
             </div>
-            <button class="btn" onclick="uploadPost()">Post</button>
+            <button class="btn" id="uploadBtn" onclick="uploadPost()">Post</button>
         </div>
         <div id="feed-data"></div>
     </div>
@@ -135,29 +195,18 @@
         <div class="cover"></div>
         <div class="p-avatar-box">
             <div class="avatar-wrapper">
-                <img id="uAv" class="p-avatar" src="">
+                <img id="uAv" class="p-avatar" src="" onclick="viewImage(this.src)">
                 <label for="pUp" class="cam-btn" id="upBtn" style="display:none;">
                     <span class="material-symbols-outlined" style="font-size:18px;">photo_camera</span>
                 </label>
                 <input type="file" id="pUp" hidden accept="image/*" onchange="changeAv(this)">
             </div>
             <h2 id="uName" style="margin:5px 0 0 0; display:flex; align-items:center; justify-content:center; gap:5px;"></h2>
-           
-            <div id="uMeta" class="meta-info"></div>
-
+            <div id="uMeta" class="meta-info" style="display:flex; flex-direction:column; align-items:center; gap:5px; margin-top:10px; color:var(--gr); font-size:14px;"></div>
             <div id="profileActions" style="padding:10px 15px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-                <button id="editBioBtn" class="btn btn-sec" style="width:auto; display:none;" onclick="editBio()">Edit Bio</button>
-                <button id="applyBtn" class="btn" style="background:var(--green); width:auto; display:none;" onclick="applyV()">Apply for Tick</button>
-                <button id="friendBtn" class="btn" style="width:auto; display:none;" onclick="handleFriend()">Add Friend</button>
-                <button id="followBtn" class="btn btn-sec" style="width:auto; display:none;" onclick="handleFollow()">Follow</button>
+                <button id="editBioBtn" class="btn btn-sec" style="width:auto; display:none; background:#e4e6eb; color:#050505;" onclick="openEditModal()">Edit Profile</button>
+                <button id="addFriendBtn" class="btn" style="width:auto; display:none;" onclick="toggleFriend()"></button>
             </div>
-           
-            <div id="uStats" style="display:flex; justify-content:center; gap:20px; font-size:14px; margin-top:5px; padding-bottom:10px; border-bottom:1px solid var(--border);">
-                <div><b id="statFol">0</b> Followers</div>
-                <div><b id="statFing">0</b> Following</div>
-                <div><b id="statFr">0</b> Friends</div>
-            </div>
-
             <p id="uBio" style="color:var(--gr); padding:0 20px; font-size:14px; margin-top:10px;"></p>
         </div>
         <div id="uPosts" style="padding:12px;"></div>
@@ -169,21 +218,58 @@
     if (!firebase.apps.length) { firebase.initializeApp(cfg); }
     const db = firebase.firestore();
 
-    let curUser = null; let allPosts = []; let allUsers = []; let viewingId = null;
+    let curUser = null; let allPosts = []; let allUsers = []; let allStories = []; let viewingId = null;
     let searchQuery = "";
+
+    async function compressImg(file, maxWidth = 800, quality = 0.6) {
+        return new Promise(res => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const scale = Math.min(1, maxWidth / img.width);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    res(canvas.toDataURL('image/jpeg', quality));
+                };
+            };
+        });
+    }
+
+    function viewImage(src) {
+        if(!src || src.includes('pravatar.cc')) return;
+        document.getElementById('lbImg').src = src;
+        document.getElementById('lightbox').style.display = 'flex';
+    }
 
     function fmtTime(ts) {
         if(!ts) return "Recently";
+        const date = new Date(ts);
         const diff = Math.floor((Date.now() - ts) / 1000);
         if (diff < 60) return "Just now";
         if (diff < 3600) return Math.floor(diff / 60) + "m ago";
         if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-        return new Date(ts).toLocaleDateString();
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function getAge(birthDateString) {
+        if (!birthDateString) return "";
+        var today = new Date();
+        var birthDate = new Date(birthDateString);
+        var age = today.getFullYear() - birthDate.getFullYear();
+        var m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; }
+        return age + " years old";
     }
 
     function getTick(u) {
-        if(u.n.toLowerCase() === 'fidahakim') return `<span class="material-symbols-outlined v-blue">verified</span>`;
-        if(u.verified === 'green') return `<span class="material-symbols-outlined v-green">verified</span>`;
+        if(u.n && u.n.toLowerCase() === 'fidahakim') return `<span class="material-symbols-outlined" style="color:var(--blue); font-variation-settings:'FILL' 1; font-size:18px;">verified</span>`;
+        if(u.verified === 'green') return `<span class="material-symbols-outlined" style="color:var(--green); font-variation-settings:'FILL' 1; font-size:18px;">verified</span>`;
         return "";
     }
 
@@ -194,14 +280,26 @@
             curUser = { id: s.docs[0].id, ...s.docs[0].data() };
             document.getElementById('authLayer').style.display='none';
             document.getElementById('mainApp').style.display='block';
+            document.getElementById('postBoxAv').src = curUser.av;
             sync();
         } else alert("Invalid Login");
     }
 
     async function doSignup() {
         const u = {
-            n: document.getElementById('rName').value, e: document.getElementById('rEmail').value, p: document.getElementById('rPass').value, edu: document.getElementById('rEdu').value, birth: document.getElementById('rBirth').value, sex: document.getElementById('rSex').value, verified: "none", av: "https://i.pravatar.cc/150", bio: "Available", ts: Date.now(),
-            friends: [], friendReqsSent: [], friendReqsRecv: [], followers: [], following: []
+            n: document.getElementById('rName').value,
+            e: document.getElementById('rEmail').value,
+            p: document.getElementById('rPass').value,
+            edu: document.getElementById('rEdu').value,
+            work: document.getElementById('rWork').value,
+            status: document.getElementById('rStatus').value,
+            birth: document.getElementById('rBirth').value,
+            sex: document.getElementById('rSex').value,
+            verified: "none",
+            av: "https://i.pravatar.cc/150",
+            bio: "Available",
+            ts: Date.now(),
+            friends: [], friendReqsSent: []
         };
         await db.collection("users").add(u);
         location.reload();
@@ -216,18 +314,52 @@
         db.collection("users").onSnapshot(s => {
             allUsers = s.docs.map(d => ({id: d.id, ...d.data()}));
             if(curUser) curUser = allUsers.find(u => u.id === curUser.id);
-            if(curUser) renderPeople(allUsers);
+            if(curUser) {
+                renderPeople(allUsers);
+                document.getElementById('postBoxAv').src = curUser.av;
+            }
             if(viewingId) openProfile(viewingId);
         });
+        db.collection("stories").orderBy("ts","desc").onSnapshot(s => {
+            allStories = s.docs.map(d => ({id: d.id, ...d.data()}));
+            renderStories();
+        });
+    }
+
+    function renderStories() {
+        const storiesList = document.getElementById('stories-data');
+        if(!curUser) return;
+        let html = `
+            <div class="story-card create-story" onclick="document.getElementById('storyInp').click()">
+                <img src="${curUser.av}" class="story-img" style="height:70%; border-bottom:1px solid #eee">
+                <div class="plus-icon"><span class="material-symbols-outlined" style="font-size:18px;">add</span></div>
+                <div class="story-name" style="color:#000; bottom:5px; text-shadow:none; text-align:center;">Create Story</div>
+                <input type="file" id="storyInp" hidden accept="image/*" onchange="uploadStory(this)">
+            </div>
+        `;
+        html += allStories.map(s => {
+            const owner = allUsers.find(u => u.id === s.uid) || { n: s.u, av: s.av };
+            return `
+                <div class="story-card" onclick="viewImage('${s.img}')">
+                    <img src="${owner.av}" class="story-owner-av">
+                    <img src="${s.img}" class="story-img">
+                    <div class="story-name">${owner.n}</div>
+                </div>
+            `;
+        }).join('');
+        storiesList.innerHTML = html;
+    }
+
+    async function uploadStory(input) {
+        const file = input.files[0]; if(!file) return;
+        const base64 = await compressImg(file, 600, 0.7);
+        await db.collection("stories").add({ uid: curUser.id, u: curUser.n, av: curUser.av, img: base64, ts: Date.now() });
     }
 
     function toggleSearch() {
         const sb = document.getElementById('sBox');
         sb.classList.toggle('active');
-        if(!sb.classList.contains('active')) {
-            document.getElementById('sQuery').value = "";
-            runSearch();
-        }
+        if(!sb.classList.contains('active')) { document.getElementById('sQuery').value = ""; runSearch(); }
     }
 
     function runSearch() {
@@ -239,14 +371,18 @@
     function renderFeed(data) {
         const feed = data.filter(p =>
             (p.priv === 'public' || p.uid === curUser.id) &&
-            (p.text.toLowerCase().includes(searchQuery) || p.u.toLowerCase().includes(searchQuery))
+            ((p.text || "").toLowerCase().includes(searchQuery) || (p.u || "").toLowerCase().includes(searchQuery))
         );
 
         document.getElementById('feed-data').innerHTML = feed.map(p => {
             const author = allUsers.find(u => u.id === p.uid) || { n: p.u, av: p.av };
-            const likes = p.likes || [];
+            const reacts = p.reacts || [];
             const comms = p.comments || [];
             const isMyPost = p.uid === curUser.id;
+           
+            const myReact = reacts.find(r => r.uid === curUser.id);
+            const reactLabel = myReact ? myReact.emoji : 'Like';
+            const reactColor = myReact ? 'var(--blue)' : 'var(--gr)';
 
             return `
             <div class="card">
@@ -259,13 +395,21 @@
                     ${isMyPost ? `<span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer;" onclick="deletePost('${p.id}')">more_horiz</span>` : ''}
                 </div>
                 <p style="margin:10px 0;">${p.text}</p>
-                ${p.img ? `<img src="${p.img}" class="p-img">` : ''}
+                ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
                
-                ${likes.length > 0 ? `<div style="font-size:13px; color:var(--gr); margin-top:10px;">${likes.length} Likes</div>` : ''}
+                <div style="font-size:12px; color:var(--gr); padding:5px 0;">${reacts.length} Reactions</div>
 
                 <div class="actions">
-                    <div class="act-btn ${likes.includes(curUser.id)?'liked':''}" onclick="toggleLike('${p.id}')">
-                        <span class="material-symbols-outlined">thumb_up</span> Like
+                    <div class="act-btn" style="color:${reactColor}">
+                        <div class="react-bar">
+                            <span class="re-btn" onclick="addReaction('${p.id}', '👍')">👍</span>
+                            <span class="re-btn" onclick="addReaction('${p.id}', '❤️')">❤️</span>
+                            <span class="re-btn" onclick="addReaction('${p.id}', '😂')">😂</span>
+                            <span class="re-btn" onclick="addReaction('${p.id}', '😮')">😮</span>
+                            <span class="re-btn" onclick="addReaction('${p.id}', '😢')">😢</span>
+                            <span class="re-btn" onclick="addReaction('${p.id}', '😡')">😡</span>
+                        </div>
+                        <span class="material-symbols-outlined" style="font-variation-settings:'FILL' ${myReact?1:0}">${myReact?'thumb_up':'thumb_up'}</span> ${reactLabel}
                     </div>
                     <div class="act-btn" onclick="toggleComms('${p.id}')">
                         <span class="material-symbols-outlined">chat_bubble</span> Comment (${comms.length})
@@ -284,7 +428,7 @@
 
     function renderPeople(data) {
         if(!curUser) return;
-        const others = data.filter(u => u.id !== curUser.id && u.n.toLowerCase().includes(searchQuery));
+        const others = data.filter(u => u.id !== curUser.id && (u.n || "").toLowerCase().includes(searchQuery));
         document.getElementById('people-list').innerHTML = others.map(u => {
             return `
             <div class="card" style="display:flex; align-items:center; gap:10px; padding:10px;">
@@ -297,33 +441,42 @@
         }).join('');
     }
 
-    async function deletePost(pid) {
-        if(confirm("Delete this post permanently?")) {
-            await db.collection("posts").doc(pid).delete();
-        }
-    }
-
-    async function editBio() {
-        const b = prompt("Update your bio:", curUser.bio);
-        if(b !== null) {
-            await db.collection("users").doc(curUser.id).update({ bio: b });
-            curUser.bio = b;
-            openProfile(curUser.id);
-        }
-    }
-
     async function uploadPost() {
-        const t = document.getElementById('postTxt').value, f = document.getElementById('postImg').files[0];
+        const t = document.getElementById('postTxt').value, f = document.getElementById('postImg').files[0], btn = document.getElementById('uploadBtn');
         if(!t && !f) return;
-        const img = f ? await new Promise(res => { const r = new FileReader(); r.readAsDataURL(f); r.onload=()=>res(r.result); }) : null;
-        await db.collection("posts").add({ uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: img, priv: document.getElementById('postPriv').value, likes: [], comments: [], ts: Date.now() });
-        document.getElementById('postTxt').value = "";
+        btn.innerText = "Compressing..."; btn.disabled = true;
+        let imgBase64 = f ? await compressImg(f, 800, 0.6) : null;
+        await db.collection("posts").add({ uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgBase64, priv: document.getElementById('postPriv').value, reacts: [], comments: [], ts: Date.now() });
+        document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = "";
+        btn.innerText = "Post"; btn.disabled = false;
     }
 
-    async function toggleLike(id) {
-        const p = allPosts.find(x => x.id === id);
-        const action = p.likes.includes(curUser.id) ? firebase.firestore.FieldValue.arrayRemove(curUser.id) : firebase.firestore.FieldValue.arrayUnion(curUser.id);
-        await db.collection("posts").doc(id).update({ likes: action });
+    async function changeAv(input) {
+        const file = input.files[0]; if(!file) return;
+        const upBtn = document.getElementById('upBtn');
+        upBtn.style.opacity = "0.5";
+        const base64 = await compressImg(file, 400, 0.8);
+        await db.collection("users").doc(curUser.id).update({ av: base64 });
+        curUser.av = base64;
+        upBtn.style.opacity = "1";
+        openProfile(curUser.id);
+    }
+
+    async function addReaction(pid, emoji) {
+        const post = allPosts.find(p => p.id === pid);
+        let reacts = post.reacts || [];
+        const existingIdx = reacts.findIndex(r => r.uid === curUser.id);
+       
+        if (existingIdx > -1) {
+            if (reacts[existingIdx].emoji === emoji) {
+                reacts.splice(existingIdx, 1);
+            } else {
+                reacts[existingIdx].emoji = emoji;
+            }
+        } else {
+            reacts.push({ uid: curUser.id, emoji: emoji });
+        }
+        await db.collection("posts").doc(pid).update({ reacts: reacts });
     }
 
     async function addComm(id) {
@@ -333,55 +486,73 @@
         inp.value = "";
     }
 
+    async function toggleFriend() {
+        const mySent = curUser.friendReqsSent || [];
+        const isSent = mySent.includes(viewingId);
+        const isFriend = (curUser.friends || []).includes(viewingId);
+        if(isFriend) {
+            if(confirm("Unfriend user?")) {
+                await db.collection("users").doc(curUser.id).update({ friends: firebase.firestore.FieldValue.arrayRemove(viewingId) });
+                await db.collection("users").doc(viewingId).update({ friends: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
+            }
+        } else if(isSent) {
+            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(viewingId) });
+        } else {
+            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayUnion(viewingId) });
+        }
+    }
+
     function openProfile(uid, el) {
         const u = allUsers.find(x => x.id === uid) || curUser;
-        viewingId = uid;
-        if(el) go('v-me', el);
-       
+        viewingId = uid; if(el) go('v-me', el);
         document.getElementById('uName').innerHTML = `${u.n}${getTick(u)}`;
         document.getElementById('uAv').src = u.av;
         document.getElementById('uBio').innerText = u.bio;
         document.getElementById('uMeta').innerHTML = `
-            <div class="meta-item"><span class="material-symbols-outlined" style="font-size:16px;">school</span> ${u.edu || 'National University'}</div>
-            <div class="meta-item"><span class="material-symbols-outlined" style="font-size:16px;">person</span> ${u.sex || 'Not specified'}</div>
+            <div style="display:flex; align-items:center; gap:5px;"><span class="material-symbols-outlined" style="font-size:16px;">school</span> ${u.edu || 'No school info'}</div>
+            <div style="display:flex; align-items:center; gap:5px;"><span class="material-symbols-outlined" style="font-size:16px;">work</span> ${u.work || 'No work info'}</div>
+            <div style="display:flex; align-items:center; gap:5px;"><span class="material-symbols-outlined" style="font-size:16px;">favorite</span> ${u.status || 'Single'}</div>
+            <div style="display:flex; align-items:center; gap:5px;"><span class="material-symbols-outlined" style="font-size:16px;">cake</span> ${getAge(u.birth)}</div>
         `;
-       
-        document.getElementById('statFol').innerText = (u.followers || []).length;
-        document.getElementById('statFing').innerText = (u.following || []).length;
-        document.getElementById('statFr').innerText = (u.friends || []).length;
-
         const isMe = uid === curUser.id;
         document.getElementById('upBtn').style.display = isMe ? 'flex' : 'none';
         document.getElementById('editBioBtn').style.display = isMe ? 'block' : 'none';
-        document.getElementById('applyBtn').style.display = (isMe && u.verified === 'none') ? 'block' : 'none';
-
+        const fBtn = document.getElementById('addFriendBtn');
+        if(!isMe) {
+            fBtn.style.display = 'block';
+            const isFriend = (curUser.friends || []).includes(uid);
+            const isSent = (curUser.friendReqsSent || []).includes(uid);
+            fBtn.innerText = isFriend ? "Friends" : (isSent ? "Requested" : "Add Friend");
+            fBtn.style.background = isFriend ? "#e4e6eb" : "#1877f2";
+            fBtn.style.color = isFriend ? "#050505" : "white";
+        } else fBtn.style.display = 'none';
         const myPosts = allPosts.filter(p => p.uid === uid && (p.priv === 'public' || uid === curUser.id));
-        document.getElementById('uPosts').innerHTML = myPosts.map(p => `
-            <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:11px; color:var(--gr);">${fmtTime(p.ts)}</div>
-                    ${isMe ? `<span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer; font-size:18px;" onclick="deletePost('${p.id}')">delete</span>` : ''}
-                </div>
-                <p style="margin-top:8px;">${p.text}</p>
-                ${p.img?`<img src="${p.img}" class="p-img">`:''}
-            </div>`).join('');
+        document.getElementById('uPosts').innerHTML = myPosts.map(p => `<div class="card"><p style="margin:0 0 10px 0;">${p.text}</p>${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}<div style="font-size:11px; color:var(--gr); margin-top:5px;">${fmtTime(p.ts)}</div></div>`).join('');
     }
 
-    async function changeAv(input) {
-        const file = input.files[0]; if(!file) return;
-        const base64 = await new Promise(res => { const r = new FileReader(); r.readAsDataURL(file); r.onload=()=>res(r.result); });
-        await db.collection("users").doc(curUser.id).update({ av: base64 });
-        curUser.av = base64;
-        openProfile(curUser.id);
+    function openEditModal() {
+        document.getElementById('eBio').value = curUser.bio || "";
+        document.getElementById('eEdu').value = curUser.edu || "";
+        document.getElementById('eWork').value = curUser.work || "";
+        document.getElementById('eStatus').value = curUser.status || "Single";
+        document.getElementById('editModal').style.display = 'flex';
     }
 
-    function toggleAuth(s) {
-        document.getElementById('loginUI').style.display = s ? 'none' : 'block';
-        document.getElementById('regUI').style.display = s ? 'block' : 'none';
+    async function saveProfile() {
+        const updates = {
+            bio: document.getElementById('eBio').value,
+            edu: document.getElementById('eEdu').value,
+            work: document.getElementById('eWork').value,
+            status: document.getElementById('eStatus').value
+        };
+        await db.collection("users").doc(curUser.id).update(updates);
+        document.getElementById('editModal').style.display = 'none';
+        // Profile will auto-update via the snapshot listener
     }
 
+    async function deletePost(pid) { if(confirm("Delete post?")) await db.collection("posts").doc(pid).delete(); }
+    function toggleAuth(s) { document.getElementById('loginUI').style.display = s ? 'none' : 'block'; document.getElementById('regUI').style.display = s ? 'block' : 'none'; }
     function toggleComms(id) { document.getElementById(`cBox-${id}`).classList.toggle('active'); }
-   
     function go(id, el) {
         document.querySelectorAll('.view').forEach(v => v.classList.remove('v-on'));
         document.getElementById(id).classList.add('v-on');

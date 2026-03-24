@@ -83,7 +83,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
     </style>
 </head>
-<body>
+<body onload="checkLogin()">
 
 <div id="lightbox" onclick="this.style.display='none'">
     <span class="material-symbols-outlined close-lb">close</span>
@@ -151,7 +151,7 @@
         <h2 style="color:var(--blue); margin:0; letter-spacing:-1px;">chatbook</h2>
         <div style="display:flex; gap:10px;">
             <span class="material-symbols-outlined" style="background:#eee; padding:8px; border-radius:50%; cursor:pointer;" onclick="toggleSearch()">search</span>
-            <span class="material-symbols-outlined" style="background:#eee; padding:8px; border-radius:50%; cursor:pointer;" onclick="location.reload()">logout</span>
+            <span class="material-symbols-outlined" style="background:#eee; padding:8px; border-radius:50%; cursor:pointer;" onclick="doLogout()">logout</span>
         </div>
     </header>
 
@@ -227,6 +227,31 @@
     let curUser = null; let allPosts = []; let allUsers = []; let allStories = []; let viewingId = null;
     let searchQuery = "";
 
+    async function checkLogin() {
+        const savedUid = localStorage.getItem("chatbook_uid");
+        if (savedUid) {
+            const doc = await db.collection("users").doc(savedUid).get();
+            if (doc.exists) {
+                curUser = { id: doc.id, ...doc.data() };
+                initApp();
+            } else {
+                localStorage.removeItem("chatbook_uid");
+            }
+        }
+    }
+
+    function initApp() {
+        document.getElementById('authLayer').style.display='none';
+        document.getElementById('mainApp').style.display='block';
+        document.getElementById('postBoxAv').src = curUser.av;
+        sync();
+    }
+
+    function doLogout() {
+        localStorage.removeItem("chatbook_uid");
+        location.reload();
+    }
+
     async function compressImg(file, maxWidth = 800, quality = 0.6) {
         return new Promise(res => {
             const reader = new FileReader();
@@ -284,10 +309,8 @@
         const s = await db.collection("users").where("e","==",e).where("p","==",p).get();
         if(!s.empty) {
             curUser = { id: s.docs[0].id, ...s.docs[0].data() };
-            document.getElementById('authLayer').style.display='none';
-            document.getElementById('mainApp').style.display='block';
-            document.getElementById('postBoxAv').src = curUser.av;
-            sync();
+            localStorage.setItem("chatbook_uid", curUser.id);
+            initApp();
         } else alert("Invalid Login");
     }
 
@@ -307,7 +330,8 @@
             ts: Date.now(),
             friends: [], friendReqsSent: []
         };
-        await db.collection("users").add(u);
+        const docRef = await db.collection("users").add(u);
+        localStorage.setItem("chatbook_uid", docRef.id);
         location.reload();
     }
 
@@ -453,7 +477,6 @@
         const container = document.getElementById('friend-reqs-section');
         const badge = document.getElementById('req-badge');
 
-        // Update badge
         if (reqList.length > 0) {
             badge.innerText = reqList.length;
             badge.style.display = "block";

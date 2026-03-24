@@ -145,7 +145,6 @@
         .btn:hover { background-position: right center; transform: scale(1.02); box-shadow: 0 6px 15px rgba(46, 125, 50, 0.3); }
         .btn:active { transform: scale(0.98); }
 
-        /* Reaction Bar CSS */
         .act-btn { position: relative; }
         .react-bar { 
             position: absolute; 
@@ -187,6 +186,9 @@
 
         #editModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
         .modal-card { background: white; padding: 25px; border-radius: 16px; width: 100%; max-width: 400px; animation: slideUp 0.3s ease; }
+        
+        /* New Reply Styles */
+        .reply-box { margin-left: 35px; margin-top: 5px; border-left: 2px solid #eee; padding-left: 10px; }
     </style>
 </head>
 <body onload="checkLogin()">
@@ -585,11 +587,52 @@
                     </div>
                 </div>
                 <div id="cBox-${p.id}" style="display:none; padding-top:10px;">
-                    <div id="cList-${p.id}">${comms.map(c => `<div style="display:flex; gap:8px; margin-bottom:8px;"><img src="${c.av}" style="width:25px;height:25px;border-radius:50%"><div style="background:#f0f2f5; padding:8px 12px; border-radius:15px; font-size:13px;"><b>${c.u}</b> ${c.text}</div></div>`).join('')}</div>
+                    <div id="cList-${p.id}">${renderComments(p.id, comms)}</div>
                     <div style="display:flex; gap:5px;"><input id="ci-${p.id}" placeholder="Write a comment..." style="padding:8px; font-size:12px; flex:1;"><button class="btn" style="width:auto; padding:0 15px;" onclick="addComm('${p.id}')">Send</button></div>
                 </div>
             </div>`;
         }).join('');
+    }
+
+    function renderComments(pid, comms) {
+        return comms.map((c, idx) => `
+            <div style="margin-bottom:10px;">
+                <div style="display:flex; gap:8px;">
+                    <img src="${c.av}" style="width:25px;height:25px;border-radius:50%">
+                    <div>
+                        <div style="background:#f0f2f5; padding:8px 12px; border-radius:15px; font-size:13px;"><b>${c.u}</b> ${c.text}</div>
+                        <div style="font-size:11px; color:var(--blue); cursor:pointer; margin-left:10px; margin-top:2px;" onclick="showReplyBox('${pid}', ${idx})">Reply</div>
+                    </div>
+                </div>
+                <div id="replies-${pid}-${idx}">
+                    ${(c.replies || []).map(r => `
+                        <div class="reply-box" style="display:flex; gap:8px; margin-top:5px;">
+                            <img src="${r.av}" style="width:20px;height:20px;border-radius:50%">
+                            <div style="background:#f0f2f5; padding:5px 10px; border-radius:12px; font-size:12px;"><b>${r.u}</b> ${r.text}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div id="rInpBox-${pid}-${idx}" style="display:none; margin-left:35px; margin-top:5px; gap:5px;">
+                    <input id="ri-${pid}-${idx}" placeholder="Write a reply..." style="padding:5px; font-size:11px; flex:1;">
+                    <button class="btn" style="width:auto; padding:0 10px; height:28px; font-size:11px;" onclick="addReply('${pid}', ${idx})">Reply</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function showReplyBox(pid, idx) {
+        const box = document.getElementById(`rInpBox-${pid}-${idx}`);
+        box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    async function addReply(pid, cIdx) {
+        const inp = document.getElementById(`ri-${pid}-${cIdx}`); if(!inp.value) return;
+        const post = allPosts.find(p => p.id === pid);
+        let comms = [...post.comments];
+        if(!comms[cIdx].replies) comms[cIdx].replies = [];
+        comms[cIdx].replies.push({ u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() });
+        await db.collection("posts").doc(pid).update({ comments: comms });
+        inp.value = "";
     }
 
     function renderPeople(data) {
@@ -672,7 +715,7 @@
 
     async function addComm(id) {
         const inp = document.getElementById(`ci-${id}`); if(!inp.value) return;
-        const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() };
+        const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now(), replies: [] };
         await db.collection("posts").doc(id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c) });
         inp.value = "";
     }

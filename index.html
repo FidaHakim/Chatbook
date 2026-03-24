@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,9 +21,12 @@
         .search-box { background: white; padding: 10px; display: none; border-bottom: 1px solid var(--border); }
         .search-box.active { display: block; }
         .tabs { background: white; display: flex; border-bottom: 1px solid var(--border); position: sticky; top: 52px; z-index: 999; }
-        .tab { flex: 1; padding: 12px; text-align: center; color: var(--gr); cursor: pointer; }
+        .tab { flex: 1; padding: 12px; text-align: center; color: var(--gr); cursor: pointer; position: relative; }
         .t-on { color: var(--blue); border-bottom: 3px solid var(--blue); }
         .t-on span { font-variation-settings: 'FILL' 1; }
+        
+        /* Badge */
+        .badge { position: absolute; top: 5px; right: 25%; background: var(--red); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; display: none; }
 
         /* Stories Section */
         .stories-container { display: flex; gap: 10px; overflow-x: auto; padding: 5px 0 15px 0; scrollbar-width: none; }
@@ -41,12 +43,12 @@
         .view { display: none; padding: 12px; max-width: 550px; margin: 0 auto; min-height: 100vh; }
         .v-on { display: block; animation: fadeIn 0.3s ease; }
         .card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
-       
+        
         /* Post Content */
         .p-img { width: calc(100% + 24px); margin-left: -12px; max-height: 450px; object-fit: cover; margin-top: 10px; display: block; cursor: zoom-in; }
         .actions { display: flex; border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; position: relative; }
         .act-btn { flex: 1; text-align: center; padding: 8px; color: var(--gr); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
-       
+        
         /* Reactions Bar */
         .react-bar { position: absolute; bottom: 45px; left: 10px; background: white; padding: 5px 10px; border-radius: 30px; display: none; gap: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 10; animation: reactPop 0.2s ease-out; }
         .act-btn:hover .react-bar, .act-btn:active .react-bar { display: flex; }
@@ -64,7 +66,7 @@
         .p-avatar { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; object-fit: cover; background: white; cursor: zoom-in; }
         .avatar-wrapper { position: relative; width: 120px; margin: 0 auto; }
         .cam-btn { position: absolute; bottom: 5px; right: 5px; background: var(--blue); color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 2px solid white; cursor: pointer; }
-       
+        
         #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 11000; display: none; align-items: center; justify-content: center; padding: 20px; }
         #lightbox img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
         #lightbox .close-lb { position: absolute; top: 20px; right: 20px; color: white; cursor: pointer; font-size: 30px; }
@@ -159,7 +161,10 @@
 
     <div class="tabs">
         <div class="tab t-on" onclick="go('v-feed',this)"><span class="material-symbols-outlined">home</span></div>
-        <div class="tab" onclick="go('v-ppl',this)"><span class="material-symbols-outlined">group</span></div>
+        <div class="tab" onclick="go('v-ppl',this)">
+            <span class="material-symbols-outlined">group</span>
+            <div id="req-badge" class="badge">0</div>
+        </div>
         <div class="tab" id="tab-profile" onclick="openProfile(curUser.id, this)"><span class="material-symbols-outlined">account_circle</span></div>
     </div>
 
@@ -187,7 +192,8 @@
     </div>
 
     <div id="v-ppl" class="view">
-        <h3 style="margin-left:5px; margin-top:0;">Discover People</h3>
+        <div id="friend-reqs-section"></div>
+        <h3 style="margin-left:5px; margin-top:20px;">Discover People</h3>
         <div id="people-list"></div>
     </div>
 
@@ -316,6 +322,7 @@
             if(curUser) curUser = allUsers.find(u => u.id === curUser.id);
             if(curUser) {
                 renderPeople(allUsers);
+                renderFriendRequests();
                 document.getElementById('postBoxAv').src = curUser.av;
             }
             if(viewingId) openProfile(viewingId);
@@ -379,7 +386,7 @@
             const reacts = p.reacts || [];
             const comms = p.comments || [];
             const isMyPost = p.uid === curUser.id;
-           
+            
             const myReact = reacts.find(r => r.uid === curUser.id);
             const reactLabel = myReact ? myReact.emoji : 'Like';
             const reactColor = myReact ? 'var(--blue)' : 'var(--gr)';
@@ -396,7 +403,7 @@
                 </div>
                 <p style="margin:10px 0;">${p.text}</p>
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
-               
+                
                 <div style="font-size:12px; color:var(--gr); padding:5px 0;">${reacts.length} Reactions</div>
 
                 <div class="actions">
@@ -441,6 +448,59 @@
         }).join('');
     }
 
+    function renderFriendRequests() {
+        const reqList = allUsers.filter(u => (u.friendReqsSent || []).includes(curUser.id));
+        const container = document.getElementById('friend-reqs-section');
+        const badge = document.getElementById('req-badge');
+
+        // Update badge
+        if (reqList.length > 0) {
+            badge.innerText = reqList.length;
+            badge.style.display = "block";
+        } else {
+            badge.style.display = "none";
+        }
+
+        if (reqList.length === 0) {
+            container.innerHTML = "";
+            return;
+        }
+        container.innerHTML = `
+            <h3 style="margin-left:5px;">Friend Requests</h3>
+            ${reqList.map(u => `
+                <div class="card" style="display:flex; align-items:center; gap:10px; padding:10px;">
+                    <img src="${u.av}" style="width:60px; height:60px; border-radius:50%; object-fit:cover;">
+                    <div style="flex:1;">
+                        <b>${u.n}</b>
+                        <div style="display:flex; gap:5px; margin-top:5px;">
+                            <button class="btn" style="padding:5px 10px; font-size:12px;" onclick="acceptReq('${u.id}')">Confirm</button>
+                            <button class="btn" style="padding:5px 10px; font-size:12px; background:#e4e6eb; color:black;" onclick="rejectReq('${u.id}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    }
+
+    async function acceptReq(uid) {
+        const batch = db.batch();
+        const myRef = db.collection("users").doc(curUser.id);
+        const otherRef = db.collection("users").doc(uid);
+        
+        batch.update(myRef, { friends: firebase.firestore.FieldValue.arrayUnion(uid) });
+        batch.update(otherRef, { 
+            friends: firebase.firestore.FieldValue.arrayUnion(curUser.id),
+            friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id)
+        });
+        await batch.commit();
+    }
+
+    async function rejectReq(uid) {
+        await db.collection("users").doc(uid).update({
+            friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id)
+        });
+    }
+
     async function uploadPost() {
         const t = document.getElementById('postTxt').value, f = document.getElementById('postImg').files[0], btn = document.getElementById('uploadBtn');
         if(!t && !f) return;
@@ -466,7 +526,7 @@
         const post = allPosts.find(p => p.id === pid);
         let reacts = post.reacts || [];
         const existingIdx = reacts.findIndex(r => r.uid === curUser.id);
-       
+        
         if (existingIdx > -1) {
             if (reacts[existingIdx].emoji === emoji) {
                 reacts.splice(existingIdx, 1);
@@ -547,7 +607,6 @@
         };
         await db.collection("users").doc(curUser.id).update(updates);
         document.getElementById('editModal').style.display = 'none';
-        // Profile will auto-update via the snapshot listener
     }
 
     async function deletePost(pid) { if(confirm("Delete post?")) await db.collection("posts").doc(pid).delete(); }

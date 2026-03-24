@@ -25,8 +25,11 @@
         .t-on { color: var(--blue); border-bottom: 3px solid var(--blue); }
         .t-on span { font-variation-settings: 'FILL' 1; }
         
-        /* Badge */
+        /* Badge & Status Dot */
         .badge { position: absolute; top: 5px; right: 25%; background: var(--red); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; display: none; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; display: inline-block; }
+        .online { background: var(--green); }
+        .offline { background: #bcc0c4; }
 
         /* Stories Section */
         .stories-container { display: flex; gap: 10px; overflow-x: auto; padding: 5px 0 15px 0; scrollbar-width: none; }
@@ -244,7 +247,20 @@
         document.getElementById('authLayer').style.display='none';
         document.getElementById('mainApp').style.display='block';
         document.getElementById('postBoxAv').src = curUser.av;
+        updatePresence();
+        setInterval(updatePresence, 60000); // Update status every minute
         sync();
+    }
+
+    async function updatePresence() {
+        if(curUser) {
+            await db.collection("users").doc(curUser.id).update({ lastSeen: Date.now() });
+        }
+    }
+
+    function getStatusDot(u) {
+        const isOnline = u.lastSeen && (Date.now() - u.lastSeen < 300000); // 5 mins
+        return `<span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>`;
     }
 
     function doLogout() {
@@ -328,6 +344,7 @@
             av: "https://i.pravatar.cc/150",
             bio: "Available",
             ts: Date.now(),
+            lastSeen: Date.now(),
             friends: [], friendReqsSent: []
         };
         const docRef = await db.collection("users").add(u);
@@ -369,7 +386,7 @@
             </div>
         `;
         html += allStories.map(s => {
-            const owner = allUsers.find(u => u.id === s.uid) || { n: s.u, av: s.av };
+            const owner = allUsers.find(u => u.id === s.uid) || { n: s.u, av: s.av, lastSeen: 0 };
             return `
                 <div class="story-card" onclick="viewImage('${s.img}')">
                     <img src="${owner.av}" class="story-owner-av">
@@ -406,7 +423,7 @@
         );
 
         document.getElementById('feed-data').innerHTML = feed.map(p => {
-            const author = allUsers.find(u => u.id === p.uid) || { n: p.u, av: p.av };
+            const author = allUsers.find(u => u.id === p.uid) || { n: p.u, av: p.av, lastSeen: 0 };
             const reacts = p.reacts || [];
             const comms = p.comments || [];
             const isMyPost = p.uid === curUser.id;
@@ -418,7 +435,10 @@
             return `
             <div class="card">
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <img src="${author.av}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))">
+                    <div style="position:relative">
+                        <img src="${author.av}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))">
+                        <div style="position:absolute; bottom:0; right:0;">${getStatusDot(author)}</div>
+                    </div>
                     <div style="flex:1">
                         <b onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="display:inline-flex; align-items:center; gap:3px; cursor:pointer;">${author.n}${getTick(author)}</b>
                         <div style="font-size:11px; color:var(--gr)">${fmtTime(p.ts)} • ${p.priv === 'private' ? 'Only me' : 'Public'}</div>
@@ -463,7 +483,10 @@
         document.getElementById('people-list').innerHTML = others.map(u => {
             return `
             <div class="card" style="display:flex; align-items:center; gap:10px; padding:10px;">
-                <img src="${u.av}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">
+                <div style="position:relative">
+                    <img src="${u.av}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">
+                    <div style="position:absolute; bottom:5px; right:5px;">${getStatusDot(u)}</div>
+                </div>
                 <div style="flex:1;">
                     <b style="cursor:pointer;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">${u.n}${getTick(u)}</b>
                     <div style="font-size:12px; color:var(--gr); margin-bottom:5px;">${u.edu || 'National University'}</div>
@@ -532,6 +555,7 @@
         await db.collection("posts").add({ uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgBase64, priv: document.getElementById('postPriv').value, reacts: [], comments: [], ts: Date.now() });
         document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = "";
         btn.innerText = "Post"; btn.disabled = false;
+        updatePresence();
     }
 
     async function changeAv(input) {
@@ -560,6 +584,7 @@
             reacts.push({ uid: curUser.id, emoji: emoji });
         }
         await db.collection("posts").doc(pid).update({ reacts: reacts });
+        updatePresence();
     }
 
     async function addComm(id) {
@@ -567,6 +592,7 @@
         const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() };
         await db.collection("posts").doc(id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c) });
         inp.value = "";
+        updatePresence();
     }
 
     async function toggleFriend() {
@@ -583,12 +609,13 @@
         } else {
             await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayUnion(viewingId) });
         }
+        updatePresence();
     }
 
     function openProfile(uid, el) {
         const u = allUsers.find(x => x.id === uid) || curUser;
         viewingId = uid; if(el) go('v-me', el);
-        document.getElementById('uName').innerHTML = `${u.n}${getTick(u)}`;
+        document.getElementById('uName').innerHTML = `${u.n}${getTick(u)} ${getStatusDot(u)}`;
         document.getElementById('uAv').src = u.av;
         document.getElementById('uBio').innerText = u.bio;
         document.getElementById('uMeta').innerHTML = `
@@ -630,6 +657,7 @@
         };
         await db.collection("users").doc(curUser.id).update(updates);
         document.getElementById('editModal').style.display = 'none';
+        updatePresence();
     }
 
     async function deletePost(pid) { if(confirm("Delete post?")) await db.collection("posts").doc(pid).delete(); }

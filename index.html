@@ -20,7 +20,6 @@
             --accent-grad: linear-gradient(45deg, #2e7d32, #42b72a, #00c853, #2e7d32);
         }
         
-        /* Animated Background */
         body { 
             background: linear-gradient(-45deg, #f0f4f0, #e8f5e9, #f1f8e9, #ffffff);
             background-size: 400% 400%;
@@ -40,7 +39,6 @@
 
         * { box-sizing: border-box; transition: all 0.2s ease; }
 
-        /* Animated Logo */
         .logo-text {
             font-size: 42px; 
             font-weight: 800;
@@ -58,7 +56,6 @@
             100% { background-position: 300% 50%; }
         }
 
-        /* Auth UI */
         #authLayer { position: fixed; inset: 0; background: var(--bg); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .auth-card { 
             background: rgba(255, 255, 255, 0.9); 
@@ -72,7 +69,6 @@
             border: 1px solid rgba(255,255,255,0.3);
         }
 
-        /* Navigation & Tabs (Glassmorphism) */
         header { 
             background: rgba(255, 255, 255, 0.8); 
             backdrop-filter: blur(12px);
@@ -107,7 +103,6 @@
             border-radius: 10px;
         }
 
-        /* Cards & Hover Effects */
         .card { 
             background: white; 
             padding: 15px; 
@@ -118,7 +113,6 @@
         }
         .card:hover { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(0,0,0,0.08); }
 
-        /* Story Animation */
         .story-card { 
             min-width: 100px; 
             height: 160px; 
@@ -132,7 +126,6 @@
         .story-card:hover { border-color: var(--green); }
         .story-card:hover .story-img { transform: scale(1.1) rotate(1deg); }
 
-        /* Button Pro Styling */
         .btn { 
             background: var(--accent-grad);
             background-size: 200%;
@@ -152,29 +145,31 @@
         .btn:hover { background-position: right center; transform: scale(1.02); box-shadow: 0 6px 15px rgba(46, 125, 50, 0.3); }
         .btn:active { transform: scale(0.98); }
 
-        /* Reaction Bar Pro */
+        /* Reaction Bar CSS */
+        .act-btn { position: relative; }
         .react-bar { 
             position: absolute; 
-            bottom: 50px; 
-            left: 10px; 
+            bottom: 45px; 
+            left: 50%;
+            transform: translateX(-50%);
             background: white; 
-            padding: 8px 15px; 
+            padding: 8px 12px; 
             border-radius: 40px; 
             display: none; 
-            gap: 12px; 
+            gap: 10px; 
             box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
-            z-index: 10; 
+            z-index: 100; 
             animation: reactPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
         }
+        .act-btn:hover .react-bar { display: flex; }
+        .re-btn { font-size: 22px; cursor: pointer; transition: transform 0.2s; }
+        .re-btn:hover { transform: scale(1.4) translateY(-5px); }
 
         @keyframes reactPop { 
-            from { opacity: 0; transform: translateY(20px) scale(0.5); } 
-            to { opacity: 1; transform: translateY(0) scale(1); } 
+            from { opacity: 0; transform: translateX(-50%) translateY(20px) scale(0.5); } 
+            to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } 
         }
 
-        .re-btn:hover { transform: scale(1.5) translateY(-5px); }
-
-        /* General UI components */
         .view { display: none; padding: 12px; max-width: 550px; margin: 0 auto; min-height: 100vh; }
         .v-on { display: block; animation: slideUp 0.4s ease; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -187,8 +182,8 @@
         .badge { position: absolute; top: 5px; right: 25%; background: var(--red); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; border: 2px solid white; }
 
         #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 11000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
-        input, textarea, select { border: 1px solid var(--border); border-radius: 8px; transition: border-color 0.3s; }
-        input:focus { border-color: var(--green); background: white; }
+        input, textarea, select { border: 1px solid var(--border); border-radius: 8px; transition: border-color 0.3s; width: 100%; padding: 10px; }
+        input:focus { border-color: var(--green); outline: none; }
 
         #editModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
         .modal-card { background: white; padding: 25px; border-radius: 16px; width: 100%; max-width: 400px; animation: slideUp 0.3s ease; }
@@ -205,11 +200,11 @@
     <div class="modal-card">
         <h3 style="margin-top:0">Edit Profile</h3>
         <label style="font-size:12px; color:var(--gr)">Bio</label>
-        <input type="text" id="eBio" placeholder="Tell us about yourself">
+        <input type="text" id="eBio">
         <label style="font-size:12px; color:var(--gr)">Education</label>
-        <input type="text" id="eEdu" placeholder="School/University">
+        <input type="text" id="eEdu">
         <label style="font-size:12px; color:var(--gr)">Work / Company</label>
-        <input type="text" id="eWork" placeholder="Current Job">
+        <input type="text" id="eWork">
         <label style="font-size:12px; color:var(--gr)">Relationship Status</label>
         <select id="eStatus">
             <option value="Single">Single</option>
@@ -230,11 +225,11 @@
         <h1 class="logo-text">chatbook</h1>
         <p style="color:var(--gr); margin-bottom:25px;">Connect with your world in HD.</p>
         <div id="loginUI">
-            <input type="email" id="lEmail" placeholder="Email" style="padding:14px; margin-bottom:12px; width:100%">
-            <input type="password" id="lPass" placeholder="Password" style="padding:14px; margin-bottom:12px; width:100%">
+            <input type="email" id="lEmail" placeholder="Email" style="margin-bottom:12px;">
+            <input type="password" id="lPass" placeholder="Password" style="margin-bottom:12px;">
             <button class="btn" onclick="doLogin()">Log In</button>
             <hr style="opacity:0.1; margin:25px 0;">
-            <button class="btn" style="background:#42b72a; width:auto; margin:0 auto; box-shadow: 0 4px 10px rgba(66, 183, 42, 0.2);" onclick="toggleAuth(true)">Create New Account</button>
+            <button class="btn" style="background:#42b72a; width:auto; margin:0 auto;" onclick="toggleAuth(true)">Create New Account</button>
         </div>
         <div id="regUI" style="display:none;">
             <h3>Join Chatbook</h3>
@@ -242,11 +237,10 @@
             <input type="email" id="rEmail" placeholder="Email">
             <input type="password" id="rPass" placeholder="Password">
             <input type="text" id="rEdu" placeholder="Education">
-            <input type="text" id="rWork" placeholder="Work / Club Information">
+            <input type="text" id="rWork" placeholder="Work Information">
             <select id="rStatus" style="margin-bottom:10px;">
                 <option value="Single">Single</option>
                 <option value="Married">Married</option>
-                <option value="In a relationship">In a relationship</option>
             </select>
             <div style="display:flex; gap:5px;">
                 <input type="date" id="rBirth" style="flex:1">
@@ -267,7 +261,7 @@
         </div>
     </header>
 
-    <div id="sBox" class="search-box" style="display:none; padding:10px; background:white; border-bottom:1px solid var(--border);">
+    <div id="sBox" style="display:none; padding:10px; background:white; border-bottom:1px solid var(--border);">
         <input type="text" id="sQuery" placeholder="Search people or posts..." oninput="runSearch()" style="margin:0;">
     </div>
 
@@ -297,7 +291,7 @@
                     <span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; color:var(--blue);">videocam</span> Video
                     <input type="file" id="postVid" accept="video/*" hidden>
                 </label>
-                <select id="postPriv" style="flex:1; margin-bottom:0; font-size:12px; height:35px;">
+                <select id="postPriv" style="flex:1; margin-bottom:0; font-size:12px; height:35px; width:auto;">
                     <option value="public">🌍 Public</option>
                     <option value="friends">👥 Friends</option>
                     <option value="private">🔒 Private</option>
@@ -337,7 +331,6 @@
 </div>
 
 <script>
-    // CORE LOGIC - UNCHANGED AS REQUESTED
     const cfg = { apiKey: "AIzaSyBO0D2WarLVknFLMwW6iKsPUYGZbgEsJLo", projectId: "chatbook-78d49" };
     if (!firebase.apps.length) { firebase.initializeApp(cfg); }
     const db = firebase.firestore();
@@ -585,7 +578,7 @@
                             <span class="re-btn" onclick="addReaction('${p.id}', '😢')">😢</span>
                             <span class="re-btn" onclick="addReaction('${p.id}', '😡')">😡</span>
                         </div>
-                        <span class="material-symbols-outlined">thumb_up</span> ${myReact ? myReact.emoji : 'Like'}
+                        <span class="material-symbols-outlined">${myReact ? 'favorite' : 'thumb_up'}</span> ${myReact ? myReact.emoji : 'Like'}
                     </div>
                     <div onclick="toggleComms('${p.id}')" style="flex:1; text-align:center; padding:10px; cursor:pointer; color:var(--gr); font-weight:bold; display:flex; align-items:center; justify-content:center; gap:5px;">
                         <span class="material-symbols-outlined">chat_bubble</span> ${comms.length}
@@ -669,7 +662,10 @@
         const post = allPosts.find(p => p.id === pid);
         let reacts = post.reacts || [];
         const idx = reacts.findIndex(r => r.uid === curUser.id);
-        if (idx > -1) { if (reacts[idx].emoji === emoji) reacts.splice(idx, 1); else reacts[idx].emoji = emoji; }
+        if (idx > -1) { 
+            if (reacts[idx].emoji === emoji) reacts.splice(idx, 1); 
+            else reacts[idx].emoji = emoji; 
+        }
         else reacts.push({ uid: curUser.id, emoji: emoji });
         await db.collection("posts").doc(pid).update({ reacts: reacts });
     }
@@ -721,10 +717,10 @@
     }
 
     function openEditModal() {
-        document.getElementById('eBio').value = curUser.bio;
-        document.getElementById('eEdu').value = curUser.edu;
-        document.getElementById('eWork').value = curUser.work;
-        document.getElementById('eStatus').value = curUser.status;
+        document.getElementById('eBio').value = curUser.bio || "";
+        document.getElementById('eEdu').value = curUser.edu || "";
+        document.getElementById('eWork').value = curUser.work || "";
+        document.getElementById('eStatus').value = curUser.status || "Single";
         document.getElementById('editModal').style.display = 'flex';
     }
 
@@ -745,7 +741,7 @@
         document.querySelectorAll('.view').forEach(v => v.classList.remove('v-on'));
         document.getElementById(id).classList.add('v-on');
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('t-on'));
-        el.classList.add('t-on');
+        if(el) el.classList.add('t-on');
         window.scrollTo(0,0);
     }
 </script>

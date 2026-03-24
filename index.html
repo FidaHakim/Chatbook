@@ -57,7 +57,8 @@
         .card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
         
         /* Post Content */
-        .p-img { width: calc(100% + 24px); margin-left: -12px; max-height: 450px; object-fit: cover; margin-top: 10px; display: block; cursor: zoom-in; }
+        .p-img, .p-vid { width: calc(100% + 24px); margin-left: -12px; max-height: 450px; object-fit: cover; margin-top: 10px; display: block; }
+        .p-img { cursor: zoom-in; }
         .actions { display: flex; border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; position: relative; }
         .act-btn { flex: 1; text-align: center; padding: 8px; color: var(--gr); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
         
@@ -189,13 +190,18 @@
                 <img id="postBoxAv" src="" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
                 <textarea id="postTxt" placeholder="What's on your mind?" style="margin:0;"></textarea>
             </div>
-            <div style="display:flex; gap:10px; margin-bottom:10px; align-items: center;">
+            <div style="display:flex; gap:5px; margin-bottom:10px; align-items: center; flex-wrap: wrap;">
                 <label style="flex:1; background:#f0f2f5; padding:8px; border-radius:6px; font-size:12px; cursor:pointer; text-align:center; border:1px solid #ddd;">
-                    <span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle;">image</span> Add Photo
+                    <span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle;">image</span> Photo
                     <input type="file" id="postImg" accept="image/*" hidden>
+                </label>
+                <label style="flex:1; background:#f0f2f5; padding:8px; border-radius:6px; font-size:12px; cursor:pointer; text-align:center; border:1px solid #ddd;">
+                    <span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle;">videocam</span> Video
+                    <input type="file" id="postVid" accept="video/*" hidden>
                 </label>
                 <select id="postPriv" style="flex:1; margin-bottom:0;">
                     <option value="public">Public</option>
+                    <option value="friends">Friends Only</option>
                     <option value="private">Only Me</option>
                 </select>
             </div>
@@ -295,6 +301,48 @@
                     res(canvas.toDataURL('image/jpeg', quality));
                 };
             };
+        });
+    }
+
+    async function compressVideo(file) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            const videoUrl = URL.createObjectURL(file);
+            video.src = videoUrl;
+            video.muted = true;
+            video.play();
+
+            video.onloadedmetadata = () => {
+                const stream = video.captureStream();
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp8',
+                    videoBitsPerSecond: 250000 
+                });
+
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = () => {
+                        if (reader.result.length > 1048487) { 
+                            reject("Video too large after compression. Try a shorter clip.");
+                        } else {
+                            resolve(reader.result);
+                        }
+                    };
+                };
+
+                recorder.start();
+                setTimeout(() => {
+                    recorder.stop();
+                    video.pause();
+                    URL.revokeObjectURL(videoUrl);
+                }, Math.min(video.duration * 1000, 15000)); 
+            };
+            
+            video.onerror = () => reject("Failed to load video for compression.");
         });
     }
 
@@ -427,10 +475,17 @@
     }
 
     function renderFeed(data) {
-        const feed = data.filter(p =>
-            (p.priv === 'public' || p.uid === curUser.id) &&
-            ((p.text || "").toLowerCase().includes(searchQuery) || (p.u || "").toLowerCase().includes(searchQuery))
-        );
+        const myFriends = curUser.friends || [];
+        const feed = data.filter(p => {
+            const isOwner = p.uid === curUser.id;
+            const isPublic = p.priv === 'public';
+            const isFriendsOnly = p.priv === 'friends' && myFriends.includes(p.uid);
+            
+            const matchesPrivacy = isOwner || isPublic || isFriendsOnly;
+            const matchesSearch = (p.text || "").toLowerCase().includes(searchQuery) || (p.u || "").toLowerCase().includes(searchQuery);
+            
+            return matchesPrivacy && matchesSearch;
+        });
 
         document.getElementById('feed-data').innerHTML = feed.map(p => {
             const author = allUsers.find(u => u.id === p.uid) || { n: p.u, av: p.av, lastSeen: 0 };
@@ -442,6 +497,10 @@
             const reactLabel = myReact ? myReact.emoji : 'Like';
             const reactColor = myReact ? 'var(--blue)' : 'var(--gr)';
 
+            let privacyIcon = 'public';
+            if(p.priv === 'friends') privacyIcon = 'group';
+            if(p.priv === 'private') privacyIcon = 'lock';
+
             return `
             <div class="card">
                 <div style="display:flex; gap:10px; align-items:center;">
@@ -451,12 +510,15 @@
                     </div>
                     <div style="flex:1">
                         <b onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="display:inline-flex; align-items:center; gap:3px; cursor:pointer;">${author.n}${getTick(author)}</b>
-                        <div style="font-size:11px; color:var(--gr)">${fmtTime(p.ts)} • ${p.priv === 'private' ? 'Only me' : 'Public'}</div>
+                        <div style="font-size:11px; color:var(--gr); display:flex; align-items:center; gap:3px;">
+                            ${fmtTime(p.ts)} • <span class="material-symbols-outlined" style="font-size:12px;">${privacyIcon}</span>
+                        </div>
                     </div>
                     ${isMyPost ? `<span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer;" onclick="deletePost('${p.id}')">more_horiz</span>` : ''}
                 </div>
                 <p style="margin:10px 0;">${p.text}</p>
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
+                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls></video>` : ''}
                 
                 <div style="font-size:12px; color:var(--gr); padding:5px 0;">${reacts.length} Reactions</div>
 
@@ -572,12 +634,36 @@
     }
 
     async function uploadPost() {
-        const t = document.getElementById('postTxt').value, f = document.getElementById('postImg').files[0], btn = document.getElementById('uploadBtn');
-        if(!t && !f) return;
+        const t = document.getElementById('postTxt').value;
+        const fImg = document.getElementById('postImg').files[0];
+        const fVid = document.getElementById('postVid').files[0];
+        const btn = document.getElementById('uploadBtn');
+        
+        if(!t && !fImg && !fVid) return;
+        
         btn.innerText = "Compressing..."; btn.disabled = true;
-        let imgBase64 = f ? await compressImg(f, 800, 0.6) : null;
-        await db.collection("posts").add({ uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgBase64, priv: document.getElementById('postPriv').value, reacts: [], comments: [], ts: Date.now() });
-        document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = "";
+        
+        let imgBase64 = null;
+        let vidBase64 = null;
+
+        try {
+            if(fImg) imgBase64 = await compressImg(fImg, 800, 0.6);
+            if(fVid) vidBase64 = await compressVideo(fVid);
+
+            await db.collection("posts").add({ 
+                uid: curUser.id, u: curUser.n, av: curUser.av, 
+                text: t, img: imgBase64, vid: vidBase64,
+                priv: document.getElementById('postPriv').value, 
+                reacts: [], comments: [], ts: Date.now() 
+            });
+
+            document.getElementById('postTxt').value = ""; 
+            document.getElementById('postImg').value = "";
+            document.getElementById('postVid').value = "";
+        } catch(err) {
+            alert(err);
+        }
+
         btn.innerText = "Post"; btn.disabled = false;
         updatePresence();
     }
@@ -660,8 +746,23 @@
             fBtn.style.background = isFriend ? "#e4e6eb" : "var(--blue)";
             fBtn.style.color = isFriend ? "#050505" : "white";
         } else fBtn.style.display = 'none';
-        const myPosts = allPosts.filter(p => p.uid === uid && (p.priv === 'public' || uid === curUser.id));
-        document.getElementById('uPosts').innerHTML = myPosts.map(p => `<div class="card"><p style="margin:0 0 10px 0;">${p.text}</p>${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}<div style="font-size:11px; color:var(--gr); margin-top:5px;">${fmtTime(p.ts)}</div></div>`).join('');
+
+        const myFriends = curUser.friends || [];
+        const myPosts = allPosts.filter(p => {
+            if(p.uid !== uid) return false;
+            const isOwner = p.uid === curUser.id;
+            const isPublic = p.priv === 'public';
+            const isFriendsOnly = p.priv === 'friends' && (myFriends.includes(uid) || isOwner);
+            return isOwner || isPublic || isFriendsOnly;
+        });
+
+        document.getElementById('uPosts').innerHTML = myPosts.map(p => `
+            <div class="card">
+                <p style="margin:0 0 10px 0;">${p.text}</p>
+                ${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}
+                ${p.vid?`<video src="${p.vid}" class="p-vid" controls></video>`:''}
+                <div style="font-size:11px; color:var(--gr); margin-top:5px;">${fmtTime(p.ts)}</div>
+            </div>`).join('');
     }
 
     function openEditModal() {

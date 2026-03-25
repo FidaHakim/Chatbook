@@ -233,7 +233,7 @@
         
         #lbImg { 
             max-width: 95%; 
-            max-height: 90vh; 
+            max-height: 80vh; 
             border-radius: 8px; 
             box-shadow: 0 0 50px rgba(0,0,0,0.5); 
             transform: scale(0.9);
@@ -244,7 +244,7 @@
         input, textarea, select { border: 1px solid var(--border); border-radius: 10px; transition: all 0.3s; width: 100%; padding: 12px; background: #fafafa; }
         input:focus { border-color: var(--green); background: white; outline: none; box-shadow: 0 0 0 3px rgba(66, 183, 42, 0.1); }
 
-        #editModal, #settingsModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); }
+        #editModal, #settingsModal, #insightModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); }
         .modal-card { background: white; padding: 30px; border-radius: 20px; width: 100%; max-width: 420px; animation: slideUp 0.4s ease; box-shadow: 0 25px 50px rgba(0,0,0,0.3); }
         
         .reply-box { margin-left: 35px; margin-top: 5px; border-left: 2px solid #eee; padding-left: 10px; }
@@ -261,7 +261,7 @@
         /* Messenger Specific Styles */
         #v-msgs { padding: 0; }
         .chat-item { display: flex; align-items: center; gap: 15px; padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; background: white; }
-        .chat-item:hover { background: #f0f2f5; }
+        .chat-item:hover { background: #f9f9f9; }
         #chat-window { position: fixed; inset: 0; background: white; z-index: 2000; display: none; flex-direction: column; }
         .chat-header { padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; background: white; position: sticky; top: 0; }
         .chat-body { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #f0f2f5; }
@@ -283,44 +283,44 @@
         input:checked + .slider { background-color: var(--blue); }
         input:checked + .slider:before { transform: translateX(22px); }
 
-        /* Story Reaction Overlay Styles */
-        .story-reactions {
+        /* Story Reaction Overlay */
+        .story-react-footer {
             position: absolute;
-            bottom: 30px;
-            left: 5px;
+            bottom: 20px;
+            left: 0;
+            right: 0;
             display: flex;
-            gap: 2px;
-            z-index: 5;
-            background: rgba(0,0,0,0.3);
-            border-radius: 10px;
-            padding: 2px 5px;
-            pointer-events: none;
-        }
-        .story-react-item { font-size: 12px; }
-        .story-react-trigger {
-            position: absolute;
-            top: 0; right: 0; left: 0; bottom: 0;
-            display: flex;
-            align-items: center;
             justify-content: center;
-            background: rgba(0,0,0,0);
-            opacity: 0;
-            transition: opacity 0.3s;
-            z-index: 20;
-            display: none; /* Initially Hidden */
-        }
-        .story-react-trigger.active {
-            display: flex;
-            background: rgba(0,0,0,0.4);
-            opacity: 1;
+            gap: 15px;
+            padding: 10px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.5));
         }
     </style>
 </head>
 <body onload="checkLogin()">
 
-<div id="lightbox" onclick="this.style.display='none'">
-    <span class="material-symbols-outlined" style="position: absolute; top: 25px; right: 25px; color: white; cursor: pointer; font-size: 35px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">close</span>
-    <img id="lbImg" src="">
+<div id="lightbox" onclick="if(event.target === this) this.style.display='none'">
+    <span class="material-symbols-outlined" style="position: absolute; top: 25px; right: 25px; color: white; cursor: pointer; font-size: 35px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);" onclick="document.getElementById('lightbox').style.display='none'">close</span>
+    <div style="position: relative; text-align: center;">
+        <img id="lbImg" src="">
+        <div id="storyReactBar" style="display:none; margin-top: 20px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 50px; display: flex; gap: 20px; justify-content: center; width: fit-content; margin: 20px auto;">
+            <span class="re-btn" style="font-size: 32px;" onclick="addStoryReaction('👍')">👍</span>
+            <span class="re-btn" style="font-size: 32px;" onclick="addStoryReaction('❤️')">❤️</span>
+            <span class="re-btn" style="font-size: 32px;" onclick="addStoryReaction('😂')">😂</span>
+            <span class="re-btn" style="font-size: 32px;" onclick="addStoryReaction('😮')">😮</span>
+            <span class="re-btn" style="font-size: 32px;" onclick="addStoryReaction('😢')">😢</span>
+            <span class="re-btn" style="font-size: 32px;" onclick="addStoryReaction('😡')">😡</span>
+        </div>
+        <button id="viewInsightsBtn" class="btn" style="display:none; width:auto; margin: 10px auto; background: rgba(255,255,255,0.2); color:white; border: 1px solid white;" onclick="openStoryInsights()">Viewers & Reactions</button>
+    </div>
+</div>
+
+<div id="insightModal">
+    <div class="modal-card">
+        <h3 id="insightTitle" style="margin-top:0; font-size: 20px;">Insights</h3>
+        <div id="insightList" style="max-height: 300px; overflow-y: auto; margin-top:15px;"></div>
+        <button class="btn" style="margin-top:20px;" onclick="document.getElementById('insightModal').style.display='none'">Close</button>
+    </div>
 </div>
 
 <div id="chat-window">
@@ -543,7 +543,7 @@
 
     let curUser = null; let allPosts = []; let allUsers = []; let allStories = []; let viewingId = null;
     let searchQuery = ""; let activeChatId = null; let unsubMsgs = null; let unsubPresence = null;
-    let storyLongPressTimer = null;
+    let activeStoryId = null;
 
     async function checkLogin() {
         const savedUid = localStorage.getItem("chatbook_uid");
@@ -657,12 +657,99 @@
         });
     }
 
-    function viewImage(src) {
+    async function viewImage(src, storyId = null) {
         if(!src || src.includes('pravatar.cc')) return;
         const lb = document.getElementById('lightbox');
         const lbImg = document.getElementById('lbImg');
+        const rBar = document.getElementById('storyReactBar');
+        const insBtn = document.getElementById('viewInsightsBtn');
+        
         lbImg.src = src;
+        activeStoryId = storyId;
+
+        if (storyId) {
+            const story = allStories.find(s => s.id === storyId);
+            rBar.style.display = 'flex';
+            insBtn.style.display = (story.uid === curUser.id) ? 'block' : 'none';
+            
+            // Log view
+            if(story.uid !== curUser.id) {
+                let views = story.views || [];
+                if(!views.includes(curUser.id)) {
+                    views.push(curUser.id);
+                    await db.collection("stories").doc(storyId).update({ views: views });
+                }
+            }
+        } else {
+            rBar.style.display = 'none';
+            insBtn.style.display = 'none';
+        }
+
         lb.style.display = 'flex';
+    }
+
+    function openStoryInsights() {
+        const story = allStories.find(s => s.id === activeStoryId);
+        document.getElementById('insightTitle').innerText = "Story Insights";
+        const list = document.getElementById('insightList');
+        const viewIds = story.views || [];
+        const reacts = story.reacts || [];
+
+        let html = '';
+        if(viewIds.length === 0) {
+            html = '<p style="text-align:center; color:var(--gr);">No views yet.</p>';
+        } else {
+            html = viewIds.map(vid => {
+                const user = allUsers.find(u => u.id === vid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
+                const reaction = reacts.find(r => r.uid === vid);
+                return `
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; padding: 10px; background:#f9f9f9; border-radius:10px;">
+                        <img src="${user.av}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
+                        <div style="flex:1;"><b>${user.n}</b></div>
+                        <div style="font-size:22px;">${reaction ? reaction.emoji : ''}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        list.innerHTML = html;
+        document.getElementById('insightModal').style.display = 'flex';
+    }
+
+    // New Function: Open Post Interactions
+    function openPostInteractions(pid) {
+        const post = allPosts.find(p => p.id === pid);
+        document.getElementById('insightTitle').innerText = "Post Interactions";
+        const list = document.getElementById('insightList');
+        const reacts = post.reacts || [];
+        const views = post.views || [];
+
+        let html = `<h4>Reactions (${reacts.length})</h4>`;
+        if(reacts.length === 0) html += '<p style="font-size:12px; color:var(--gr);">No reactions yet.</p>';
+        else {
+            html += reacts.map(r => {
+                const user = allUsers.find(u => u.id === r.uid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
+                return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                    <img src="${user.av}" style="width:30px; height:30px; border-radius:50%;">
+                    <div style="flex:1;"><b>${user.n}</b></div>
+                    <div style="font-size:18px;">${r.emoji}</div>
+                </div>`;
+            }).join('');
+        }
+
+        html += `<h4 style="margin-top:20px;">Viewers (${views.length})</h4>`;
+        if(views.length === 0) html += '<p style="font-size:12px; color:var(--gr);">No views tracked.</p>';
+        else {
+            html += views.map(vid => {
+                const user = allUsers.find(u => u.id === vid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
+                return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                    <img src="${user.av}" style="width:30px; height:30px; border-radius:50%;">
+                    <div><b>${user.n}</b></div>
+                </div>`;
+            }).join('');
+        }
+
+        list.innerHTML = html;
+        document.getElementById('insightModal').style.display = 'flex';
     }
 
     function fmtTime(ts) {
@@ -744,27 +831,10 @@
         `;
         html += allStories.map(s => {
             const owner = allUsers.find(u => u.id === s.uid) || { n: s.u, av: s.av };
-            const reacts = s.reacts || [];
-            const reactSummary = reacts.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
-            let reactHtml = '';
-            for(const emoji in reactSummary) { reactHtml += `<span class="story-react-item">${emoji}${reactSummary[emoji]}</span>`; }
-
             return `
-                <div class="story-card" 
-                    onmousedown="startStoryPress('${s.id}')" 
-                    onmouseup="endStoryPress('${s.img}')" 
-                    ontouchstart="startStoryPress('${s.id}')" 
-                    ontouchend="endStoryPress('${s.img}')">
-                    <img src="${owner.av}" style="position: absolute; top: 8px; left: 8px; width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--blue); object-fit: cover; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.3);" onclick="event.stopPropagation(); openProfile('${s.uid}', document.getElementById('tab-profile'))">
+                <div class="story-card" onclick="viewImage('${s.img}', '${s.id}')">
+                    <img src="${owner.av}" style="position: absolute; top: 8px; left: 8px; width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--blue); object-fit: cover; z-index: 2; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
                     <img src="${s.img}" class="story-img" style="width:100%; height:100%; object-fit:cover;">
-                    <div class="story-reactions">${reactHtml}</div>
-                    <div id="react-overlay-${s.id}" class="story-react-trigger" onclick="event.stopPropagation()">
-                        <div style="display:flex; gap:10px; background:white; padding:8px; border-radius:50px; box-shadow:0 5px 15px rgba(0,0,0,0.3);">
-                            <span style="font-size:20px; cursor:pointer;" onclick="addStoryReact('${s.id}', '❤️')">❤️</span>
-                            <span style="font-size:20px; cursor:pointer;" onclick="addStoryReact('${s.id}', '🔥')">🔥</span>
-                            <span style="font-size:20px; cursor:pointer;" onclick="addStoryReact('${s.id}', '😂')">😂</span>
-                        </div>
-                    </div>
                     <div style="position: absolute; bottom: 8px; left: 8px; color: white; font-size: 11px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.8);">${owner.n}</div>
                 </div>
             `;
@@ -772,45 +842,35 @@
         storiesList.innerHTML = html;
     }
 
-    function startStoryPress(sid) {
-        storyLongPressTimer = setTimeout(() => {
-            const overlay = document.getElementById(`react-overlay-${sid}`);
-            if(overlay) overlay.classList.add('active');
-            storyLongPressTimer = null;
-        }, 600);
-    }
-
-    function endStoryPress(imgUrl) {
-        if(storyLongPressTimer) {
-            clearTimeout(storyLongPressTimer);
-            storyLongPressTimer = null;
-            viewImage(imgUrl);
-        }
-    }
-
-    // Close overlays if clicking elsewhere
-    document.addEventListener('click', (e) => {
-        if(!e.target.closest('.story-react-trigger')) {
-            document.querySelectorAll('.story-react-trigger').forEach(el => el.classList.remove('active'));
-        }
-    });
-
-    async function addStoryReact(sid, emoji) {
-        const story = allStories.find(s => s.id === sid);
-        let reacts = story.reacts || [];
-        const idx = reacts.findIndex(r => r.uid === curUser.id && r.emoji === emoji);
-        if (idx > -1) reacts.splice(idx, 1);
-        else reacts.push({ uid: curUser.id, emoji: emoji });
-        await db.collection("stories").doc(sid).update({ reacts: reacts });
-        document.getElementById(`react-overlay-${sid}`).classList.remove('active');
-    }
-
     async function uploadStory(input) {
         const file = input.files[0]; if(!file) return;
         const base64 = await compressImg(file, 800, 0.7);
-        await db.collection("stories").add({ 
-            uid: curUser.id, u: curUser.n, av: curUser.av, img: base64, ts: Date.now(), reacts: [] 
-        });
+        await db.collection("stories").add({ uid: curUser.id, u: curUser.n, av: curUser.av, img: base64, ts: Date.now(), reacts: [], views: [] });
+    }
+
+    async function addStoryReaction(emoji) {
+        if(!activeStoryId) return;
+        const story = allStories.find(s => s.id === activeStoryId);
+        let reacts = story.reacts || [];
+        
+        // Remove existing reaction from this user if any
+        reacts = reacts.filter(r => r.uid !== curUser.id);
+        reacts.push({ uid: curUser.id, u: curUser.n, emoji: emoji });
+        
+        await db.collection("stories").doc(activeStoryId).update({ reacts: reacts });
+        
+        // Show visual feedback
+        const heart = document.createElement('div');
+        heart.innerHTML = emoji;
+        heart.style.position = 'fixed';
+        heart.style.left = '50%';
+        heart.style.top = '50%';
+        heart.style.fontSize = '80px';
+        heart.style.transform = 'translate(-50%, -50%)';
+        heart.style.animation = 'reactPop 0.6s forwards';
+        heart.style.zIndex = '12000';
+        document.body.appendChild(heart);
+        setTimeout(() => heart.remove(), 600);
     }
 
     function toggleSearch() {
@@ -839,8 +899,14 @@
             const author = allUsers.find(u => u.id === p.uid) || { n: p.u, av: p.av, lastSeen: 0 };
             const reacts = p.reacts || [];
             const comms = p.comments || [];
+            const views = p.views || [];
             const myReact = reacts.find(r => r.uid === curUser.id);
             
+            // Log post view if not owner
+            if(p.uid !== curUser.id && !views.includes(curUser.id)) {
+                db.collection("posts").doc(p.id).update({ views: firebase.firestore.FieldValue.arrayUnion(curUser.id) });
+            }
+
             return `
             <div class="card" id="post-${p.id}">
                 <div style="display:flex; gap:10px; align-items:center;">
@@ -867,7 +933,9 @@
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
                 ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="metadata" playsinline></video>` : ''}
                 
-                <div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500;">${reacts.length} Reactions • ${comms.length} Comments</div>
+                <div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500; cursor:pointer;" onclick="openPostInteractions('${p.id}')">
+                    ${reacts.length} Reactions • ${comms.length} Comments • ${views.length} Views
+                </div>
 
                 <div style="display: flex; position: relative;">
                     <div class="act-btn" style="flex:1; text-align:center; padding:12px; cursor:pointer; color:${myReact ? 'var(--blue)' : 'var(--gr)'}; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
@@ -1005,6 +1073,7 @@
         const badge = document.getElementById('req-badge');
         badge.innerText = reqList.length;
         badge.style.display = reqList.length > 0 ? "block" : "none";
+
         const container = document.getElementById('friend-reqs-section');
         if (reqList.length === 0) { container.innerHTML = ""; return; }
         container.innerHTML = `<h3 style="margin-left:5px; margin-top: 10px;">Friend Requests</h3>` + reqList.map(u => `
@@ -1027,21 +1096,27 @@
         await batch.commit();
     }
 
-    async function rejectReq(uid) { await db.collection("users").doc(uid).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) }); }
+    async function rejectReq(uid) {
+        await db.collection("users").doc(uid).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
+    }
 
     async function uploadPost() {
         const t = document.getElementById('postTxt').value;
         const fImg = document.getElementById('postImg').files[0];
         const fVid = document.getElementById('postVid').files[0];
         if(!t && !fImg && !fVid) return;
+        
         const btn = document.getElementById('uploadBtn');
         btn.innerText = "Processing..."; btn.disabled = true;
+        
         let imgB64 = fImg ? await compressImg(fImg) : null;
         let vidB64 = fVid ? await compressVideo(fVid) : null;
+
         await db.collection("posts").add({ 
             uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, vid: vidB64,
-            priv: document.getElementById('postPriv').value, reacts: [], comments: [], ts: Date.now() 
+            priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() 
         });
+
         document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = ""; document.getElementById('postVid').value = "";
         btn.innerText = "Post"; btn.disabled = false;
     }
@@ -1057,7 +1132,10 @@
         const post = allPosts.find(p => p.id === pid);
         let reacts = post.reacts || [];
         const idx = reacts.findIndex(r => r.uid === curUser.id);
-        if (idx > -1) { if (reacts[idx].emoji === emoji) reacts.splice(idx, 1); else reacts[idx].emoji = emoji; }
+        if (idx > -1) { 
+            if (reacts[idx].emoji === emoji) reacts.splice(idx, 1); 
+            else reacts[idx].emoji = emoji; 
+        }
         else reacts.push({ uid: curUser.id, emoji: emoji });
         await db.collection("posts").doc(pid).update({ reacts: reacts });
     }
@@ -1077,7 +1155,9 @@
             await db.collection("users").doc(viewingId).update({ friends: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
         }} else if(isSent) {
             await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(viewingId) });
-        } else { await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayUnion(viewingId) }); }
+        } else {
+            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayUnion(viewingId) });
+        }
     }
 
     function openProfile(uid, el) {
@@ -1086,8 +1166,10 @@
         document.getElementById('uName').innerHTML = `${u.n}${getTick(u)} ${getStatusDot(u)}`;
         document.getElementById('uAv').src = u.av;
         document.getElementById('uBio').innerText = u.bio;
+        
         const isMe = uid === curUser.id;
         const isFriend = (curUser.friends || []).includes(uid);
+        
         if(u.locked && !isMe && !isFriend) {
             document.getElementById('uMeta').innerHTML = `<div style="color:var(--red); font-weight:bold;">🔒 Profile is Private</div>`;
             document.getElementById('uPosts').innerHTML = `<div class="card" style="text-align:center; color:var(--gr);">Add ${u.n} to see their posts.</div>`;
@@ -1101,9 +1183,11 @@
                     <div style="font-size:11px; color:#999; margin-top:8px; font-weight: 500;">${fmtTime(p.ts)} • ${p.priv}</div>
                 </div>`).join('');
         }
+        
         document.getElementById('upBtn').style.display = isMe ? 'flex' : 'none';
         document.getElementById('editBioBtn').style.display = isMe ? 'block' : 'none';
         document.getElementById('msgBtn').style.display = isMe ? 'none' : 'block';
+        
         const fBtn = document.getElementById('addFriendBtn');
         if(!isMe) {
             fBtn.style.display = 'block';
@@ -1138,7 +1222,9 @@
     function toggleComms(id) { 
         const c = document.getElementById(`cBox-${id}`); 
         c.style.display = c.style.display==='none'?'block':'none'; 
-        if(c.style.display==='block') { c.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        if(c.style.display==='block') {
+            c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     }
     function go(id, el) {
         document.querySelectorAll('.view').forEach(v => v.classList.remove('v-on'));
@@ -1151,6 +1237,7 @@
     function renderChats() {
         const chatList = document.getElementById('chats-list');
         const friends = allUsers.filter(u => (curUser.friends || []).includes(u.id));
+        
         chatList.innerHTML = friends.map(u => `
             <div class="chat-item" onclick="openChat('${u.id}')">
                 <div style="position:relative">
@@ -1169,7 +1256,9 @@
         const chatId = [curUser.id, activeChatId].sort().join('_');
         await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: true }, { merge: true });
         clearTimeout(window.typingTimer);
-        window.typingTimer = setTimeout(async () => { await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: false }, { merge: true }); }, 2000);
+        window.typingTimer = setTimeout(async () => {
+            await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: false }, { merge: true });
+        }, 2000);
     }
 
     function openChat(uid) {
@@ -1178,15 +1267,21 @@
         document.getElementById('chatAv').src = target.av;
         document.getElementById('chatName').innerText = target.n;
         document.getElementById('chat-window').style.display = 'flex';
+        
         const chatId = [curUser.id, uid].sort().join('_');
+        
         if(unsubMsgs) unsubMsgs();
         if(unsubPresence) unsubPresence();
+
+        // Typing & Info Sync
         unsubPresence = db.collection("chats").doc(chatId).onSnapshot(doc => {
             const data = doc.data();
             const isTyping = data && data[`typing_${uid}`];
             document.getElementById('typingIndicator').style.display = isTyping ? 'block' : 'none';
             document.getElementById('chatStatus').innerText = target.lastSeen && (Date.now() - target.lastSeen < 300000) ? "Active now" : "Offline";
         });
+
+        // Message Sync
         unsubMsgs = db.collection("chats").doc(chatId).collection("messages").orderBy("ts", "asc").onSnapshot(s => {
             const msgs = s.docs.map(d => ({id: d.id, ...d.data()}));
             const body = document.getElementById('chatBody');
@@ -1201,7 +1296,13 @@
                 ${showSeen ? `<div class="seen-receipt">Seen</div>` : ''}
             `}).join('');
             body.scrollTop = body.scrollHeight;
-            s.docs.forEach(d => { if(d.data().sender !== curUser.id && !d.data().seen) { db.collection("chats").doc(chatId).collection("messages").doc(d.id).update({ seen: true }); } });
+
+            // Mark as seen
+            s.docs.forEach(d => {
+                if(d.data().sender !== curUser.id && !d.data().seen) {
+                    db.collection("chats").doc(chatId).collection("messages").doc(d.id).update({ seen: true });
+                }
+            });
         });
     }
 
@@ -1216,8 +1317,14 @@
         const inp = document.getElementById('mInp');
         const txt = inp.value.trim();
         if(!txt || !activeChatId) return;
+        
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        await db.collection("chats").doc(chatId).collection("messages").add({ sender: curUser.id, text: txt, ts: Date.now(), seen: false });
+        await db.collection("chats").doc(chatId).collection("messages").add({
+            sender: curUser.id,
+            text: txt,
+            ts: Date.now(),
+            seen: false
+        });
         inp.value = "";
     }
 
@@ -1226,10 +1333,17 @@
         if(!file || !activeChatId) return;
         const b64 = await compressImg(file, 600, 0.7);
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        await db.collection("chats").doc(chatId).collection("messages").add({ sender: curUser.id, img: b64, ts: Date.now(), seen: false });
+        await db.collection("chats").doc(chatId).collection("messages").add({
+            sender: curUser.id,
+            img: b64,
+            ts: Date.now(),
+            seen: false
+        });
     }
 
-    function startChatFromProfile() { openChat(viewingId); }
+    function startChatFromProfile() {
+        openChat(viewingId);
+    }
 </script>
 </body>
 </html>

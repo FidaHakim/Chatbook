@@ -30,6 +30,7 @@
             font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
             -webkit-tap-highlight-color: transparent;
             image-rendering: -webkit-optimize-contrast;
+            overflow-x: hidden;
         }
 
         @keyframes gradientBG {
@@ -111,6 +112,7 @@
             margin-bottom: 15px; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
             border: 1px solid rgba(0,0,0,0.05);
+            backface-visibility: hidden;
         }
         .card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
 
@@ -185,6 +187,8 @@
             border-radius: 4px; 
             cursor: zoom-in;
             transition: opacity 0.3s;
+            will-change: transform;
+            transform: translateZ(0); /* Hardware Acceleration */
         }
         .p-img:hover { opacity: 0.95; }
         
@@ -226,10 +230,10 @@
         
         .reply-box { margin-left: 35px; margin-top: 5px; border-left: 2px solid #eee; padding-left: 10px; }
         
-        /* New Edit UI Styles */
-        .edit-area { background: #fffbe6 !important; border: 1px solid var(--gold) !important; font-size: 14px; padding: 10px; border-radius: 8px; width: 100%; margin: 5px 0; }
+        /* Edit UI Styles */
+        .edit-area { background: #fffbe6 !important; border: 1px solid var(--gold) !important; font-size: 14px; padding: 10px; border-radius: 8px; width: 100%; margin: 5px 0; outline: none; }
         .edit-actions { display: flex; gap: 5px; margin-top: 5px; }
-        .mini-btn { padding: 4px 10px; font-size: 11px; border-radius: 5px; border: none; cursor: pointer; }
+        .mini-btn { padding: 4px 10px; font-size: 11px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body onload="checkLogin()">
@@ -319,7 +323,6 @@
     <div id="sBox" style="display:none; padding:12px; background:white; border-bottom:1px solid var(--border); animation: slideDown 0.3s ease;">
         <input type="text" id="sQuery" placeholder="Search people or posts..." oninput="runSearch()" style="margin:0;">
     </div>
-    <style>@keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }</style>
 
     <div class="tabs">
         <div class="tab t-on" onclick="go('v-feed',this)"><span class="material-symbols-outlined">home</span></div>
@@ -634,7 +637,7 @@
                 </div>
 
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
-                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls></video>` : ''}
+                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="metadata" playsinline></video>` : ''}
                 
                 <div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500;">${reacts.length} Reactions • ${comms.length} Comments</div>
 
@@ -723,7 +726,8 @@
         const post = allPosts.find(p => p.id === pid);
         const comm = post.comments[cIdx];
         const span = document.getElementById(`cTxt-${pid}-${cIdx}`);
-        span.parentElement.innerHTML = `
+        const parent = span.parentElement;
+        parent.innerHTML = `
             <b>${comm.u}</b><br>
             <textarea id="editCommArea-${pid}-${cIdx}" class="edit-area" style="margin:5px 0;">${comm.text}</textarea>
             <div class="edit-actions">

@@ -86,6 +86,79 @@
             100% { background-position: 300% 50%; }
         }
 
+        /* Enhanced Loading Screen Styles */
+        #loadingLayer {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 100000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s;
+        }
+        body.dark-mode #loadingLayer { background: #18191a; }
+        
+        .spinner-container {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin-bottom: 30px;
+        }
+        
+        .spinner {
+            width: 100px;
+            height: 100px;
+            border: 4px solid rgba(46, 125, 50, 0.1);
+            border-top: 4px solid var(--blue);
+            border-radius: 50%;
+            animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        
+        .spinner-inner {
+            position: absolute;
+            top: 20px; left: 20px; right: 20px; bottom: 20px;
+            border: 4px solid rgba(66, 183, 42, 0.1);
+            border-bottom: 4px solid var(--green);
+            border-radius: 50%;
+            animation: spin 2s linear infinite reverse;
+        }
+
+        .loading-bar-container {
+            width: 200px;
+            height: 4px;
+            background: #eee;
+            border-radius: 10px;
+            margin-top: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .loading-bar-fill {
+            width: 100%;
+            height: 100%;
+            background: var(--accent-grad);
+            background-size: 200%;
+            position: absolute;
+            left: -100%;
+            animation: loadProgress 2s infinite ease-in-out;
+        }
+
+        .loading-status {
+            margin-top: 15px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--gr);
+            font-weight: 700;
+            animation: pulseText 1.5s infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes loadProgress { 0% { left: -100%; } 50% { left: 0%; } 100% { left: 100%; } }
+        @keyframes pulseText { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
         #authLayer { position: fixed; inset: 0; background: var(--bg); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .auth-card { 
             background: rgba(255, 255, 255, 0.9); 
@@ -328,6 +401,19 @@
     </style>
 </head>
 <body onload="checkConnectivity()">
+
+<div id="loadingLayer">
+    <div class="spinner-container">
+        <div class="spinner"></div>
+        <div class="spinner-inner"></div>
+    </div>
+    <h1 class="logo-text" style="font-size: 38px;">chatbook</h1>
+    <div class="loading-bar-container">
+        <div class="loading-bar-fill"></div>
+    </div>
+    <p class="loading-status">Establishing Secure Session</p>
+    <div style="margin-top: 30px; color: var(--gr); font-size: 10px; opacity: 0.6; font-weight: bold;">ENCRYPTED END-TO-END</div>
+</div>
 
 <div id="offline-banner">
     <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">wifi_off</span> You are currently offline.
@@ -604,6 +690,13 @@
     let searchQuery = ""; let activeChatId = null; let unsubMsgs = null; let unsubPresence = null;
     let activeStoryId = null;
 
+    // Loading screen handler
+    function hideLoader() {
+        const loader = document.getElementById('loadingLayer');
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 800);
+    }
+
     // Offline & Connectivity Listeners
     function checkConnectivity() {
         if (!navigator.onLine) {
@@ -627,19 +720,18 @@
         });
     }
 
-    function handleOfflineMode() {
+    async function handleOfflineMode() {
         document.getElementById('offline-banner').style.display = 'block';
         const savedUid = localStorage.getItem("chatbook_uid");
         if (savedUid) {
-            // Load local dummy session to bypass auth if offline
             curUser = JSON.parse(localStorage.getItem("chatbook_cached_user")) || { id: savedUid, n: "User (Offline)", av: "https://i.pravatar.cc/150" };
             initApp();
-            // Load cached posts if any
             const cachedPosts = JSON.parse(localStorage.getItem("chatbook_cached_posts"));
             if (cachedPosts) renderFeed(cachedPosts);
         } else {
             document.getElementById('authLayer').style.display = 'flex';
         }
+        hideLoader();
     }
 
     async function checkLogin() {
@@ -653,9 +745,11 @@
             } else {
                 localStorage.removeItem("chatbook_uid");
                 document.getElementById('authLayer').style.display = 'flex';
+                hideLoader();
             }
         } else {
             document.getElementById('authLayer').style.display = 'flex';
+            hideLoader();
         }
     }
 
@@ -676,6 +770,7 @@
             setInterval(updatePresence, 60000); 
             sync();
         }
+        hideLoader(); // Hide loader after data sync starts
     }
 
     async function updatePresence() {
@@ -1448,7 +1543,6 @@
                 await db.collection("chats").doc(chatId).collection("messages").doc(msgId).delete();
             }
         } else {
-            // If it's an image from others, allow zoom
             const msg = document.querySelector(`[onclick*="${msgId}"] img`);
             if(msg) viewImage(msg.src);
         }

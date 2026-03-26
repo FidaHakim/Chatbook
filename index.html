@@ -690,6 +690,12 @@
     let searchQuery = ""; let activeChatId = null; let unsubMsgs = null; let unsubPresence = null;
     let activeStoryId = null;
 
+    // Static Assets for Messenger
+    const msgAssets = {
+        banner: "input_file_0.png",
+        profile: "input_file_1.png"
+    };
+
     // Loading screen handler
     function hideLoader() {
         const loader = document.getElementById('loadingLayer');
@@ -1510,7 +1516,11 @@
         unsubMsgs = db.collection("chats").doc(chatId).collection("messages").orderBy("ts", "asc").onSnapshot(s => {
             const msgs = s.docs.map(d => ({id: d.id, ...d.data()}));
             const body = document.getElementById('chatBody');
-            body.innerHTML = msgs.map((m, idx) => {
+            
+            // Header Image Logic for New Chats
+            let headerImg = msgs.length === 0 ? `<div style="text-align:center; padding:20px;"><img src="${msgAssets.banner}" style="width:100%; border-radius:15px; margin-bottom:10px; opacity:0.8;"><p style="font-size:12px; color:var(--gr);">Say hello to ${target.n}!</p></div>` : '';
+
+            body.innerHTML = headerImg + msgs.map((m, idx) => {
                 const isMe = m.sender === curUser.id;
                 const showSeen = isMe && idx === msgs.length - 1 && m.seen;
                 return `

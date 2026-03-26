@@ -1585,11 +1585,11 @@
         });
     }
 
-    /* Long Press / Context Menu Logic */
+    /* Fixed Tap and Hold Logic */
     function handleTouchStart(e, id, sender) {
         longPressTimer = setTimeout(() => {
             showMsgMenu(e, id, sender);
-        }, 500);
+        }, 600);
     }
 
     function handleTouchEnd() {
@@ -1597,29 +1597,38 @@
     }
 
     function showMsgMenu(e, id, sender) {
-        e.preventDefault();
+        if(e) e.preventDefault();
         selectedMsgId = id;
         selectedMsgSender = sender;
         const menu = document.getElementById('msgMenu');
         const unsendOpt = document.getElementById('unsendOpt');
 
-        // Logic for "Unsend" (Only for my own messages)
         unsendOpt.style.display = (sender === curUser.id) ? 'flex' : 'none';
 
-        // Position the menu
-        let x = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-        let y = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+        let x, y;
+        if (e && e.touches && e.touches.length > 0) {
+            x = e.touches[0].clientX;
+            y = e.touches[0].clientY;
+        } else if (e && e.clientX) {
+            x = e.clientX;
+            y = e.clientY;
+        } else {
+            // Default center if coordinate mapping fails
+            x = window.innerWidth / 2 - 90;
+            y = window.innerHeight / 2 - 100;
+        }
 
-        // Bound checking
-        if (x + 180 > window.innerWidth) x = window.innerWidth - 190;
-        if (y + 200 > window.innerHeight) y = window.innerHeight - 210;
+        // Adjust for menu dimensions to keep it in view
+        if (x + 190 > window.innerWidth) x = window.innerWidth - 190;
+        if (y + 220 > window.innerHeight) y = window.innerHeight - 230;
+        if (x < 10) x = 10;
+        if (y < 10) y = 10;
 
         menu.style.left = x + 'px';
         menu.style.top = y + 'px';
         menu.style.display = 'flex';
 
-        // Trigger Haptic Feedback if available
-        if (window.navigator.vibrate) window.navigator.vibrate(50);
+        if (window.navigator.vibrate) window.navigator.vibrate(40);
     }
 
     function closeMsgMenu() {
@@ -1638,7 +1647,6 @@
                 break;
             case 'deleteMe':
                 if(confirm("Delete message for you?")) {
-                    // Logic for local hiding (in a real app, you'd track 'deletedFor' array)
                     const el = document.querySelector(`[onmousedown*="${selectedMsgId}"]`);
                     if(el) el.parentElement.style.display = 'none';
                 }
@@ -1648,10 +1656,10 @@
                 document.getElementById('mInp').placeholder = "Replying to message...";
                 break;
             case 'forward':
-                alert("Forwarding logic: Select a friend to forward this message.");
+                alert("Select a friend to forward this message.");
                 break;
             case 'pin':
-                alert("Message pinned to chat.");
+                alert("Message pinned.");
                 break;
         }
         closeMsgMenu();

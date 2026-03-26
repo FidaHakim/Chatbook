@@ -18,8 +18,17 @@
             --green: #42b72a; 
             --red: #fa3e3e; 
             --accent-grad: linear-gradient(45deg, #2e7d32, #42b72a, #00c853, #2e7d32);
+            /* Default Theme Vars */
+            --msg-bg: #f0f2f5;
+            --msg-sent-bg: #2e7d32;
+            --msg-sent-text: white;
         }
         
+        /* Messenger Themes */
+        .theme-ocean { --msg-bg: #e1f5fe; --msg-sent-bg: linear-gradient(to right, #0288d1, #26c6da); --msg-sent-text: white; }
+        .theme-sunset { --msg-bg: #fff3e0; --msg-sent-bg: linear-gradient(to right, #ff7043, #ffca28); --msg-sent-text: white; }
+        .theme-neon { --msg-bg: #1a1a1a; --msg-sent-bg: linear-gradient(to right, #d500f9, #00e5ff); --msg-sent-text: white; }
+
         /* Dark Mode overrides */
         body.dark-mode {
             --bg: #18191a;
@@ -226,7 +235,7 @@
             align-items: center; 
             justify-content: center; 
             backdrop-filter: blur(10px);
-            cursor: zoom-out;
+            cursor: default;
             animation: fadeIn 0.3s ease;
         }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -244,7 +253,7 @@
         input, textarea, select { border: 1px solid var(--border); border-radius: 10px; transition: all 0.3s; width: 100%; padding: 12px; background: #fafafa; }
         input:focus { border-color: var(--green); background: white; outline: none; box-shadow: 0 0 0 3px rgba(66, 183, 42, 0.1); }
 
-        #editModal, #settingsModal, #insightModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); }
+        #editModal, #settingsModal, #insightModal, #themeModal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); }
         .modal-card { background: white; padding: 30px; border-radius: 20px; width: 100%; max-width: 420px; animation: slideUp 0.4s ease; box-shadow: 0 25px 50px rgba(0,0,0,0.3); }
         
         .reply-box { margin-left: 35px; margin-top: 5px; border-left: 2px solid #eee; padding-left: 10px; }
@@ -264,11 +273,16 @@
         .chat-item:hover { background: #f9f9f9; }
         #chat-window { position: fixed; inset: 0; background: white; z-index: 2000; display: none; flex-direction: column; }
         .chat-header { padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; background: white; position: sticky; top: 0; }
-        .chat-body { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #f0f2f5; }
-        .msg-bubble { max-width: 75%; padding: 10px 15px; border-radius: 18px; font-size: 14px; position: relative; line-height: 1.4; }
-        .msg-sent { align-self: flex-end; background: var(--blue); color: white; border-bottom-right-radius: 4px; }
+        .chat-body { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: var(--msg-bg); }
+        .msg-bubble { max-width: 75%; padding: 10px 15px; border-radius: 18px; font-size: 14px; position: relative; line-height: 1.4; cursor: pointer; }
+        .msg-sent { align-self: flex-end; background: var(--msg-sent-bg); color: var(--msg-sent-text); border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .msg-recv { align-self: flex-start; background: white; color: black; border-bottom-left-radius: 4px; border: 1px solid #ddd; }
         .chat-footer { padding: 10px; border-top: 1px solid #eee; display: flex; gap: 10px; background: white; align-items: center; }
+
+        /* Theme Option Cards */
+        .theme-opt { display: flex; align-items: center; gap: 15px; padding: 12px; border-radius: 12px; cursor: pointer; border: 2px solid #eee; margin-bottom: 10px; }
+        .theme-opt:hover { border-color: var(--blue); background: #f9f9f9; }
+        .theme-preview { width: 30px; height: 30px; border-radius: 50%; }
 
         /* Typing & Seen Receipts */
         .typing-indicator { font-size: 11px; color: var(--gr); padding: 5px 15px; font-style: italic; display: none; }
@@ -295,12 +309,32 @@
             padding: 10px;
             background: linear-gradient(transparent, rgba(0,0,0,0.5));
         }
+
+        /* Offline Detection UI */
+        #offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #323232;
+            color: white;
+            text-align: center;
+            padding: 5px;
+            font-size: 12px;
+            z-index: 20000;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
     </style>
 </head>
-<body onload="checkLogin()">
+<body onload="checkConnectivity()">
 
-<div id="lightbox" onclick="if(event.target === this) this.style.display='none'">
-    <span class="material-symbols-outlined" style="position: absolute; top: 25px; right: 25px; color: white; cursor: pointer; font-size: 35px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);" onclick="document.getElementById('lightbox').style.display='none'">close</span>
+<div id="offline-banner">
+    <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">wifi_off</span> You are currently offline.
+</div>
+
+<div id="lightbox">
+    <span class="material-symbols-outlined" style="position: absolute; top: 25px; right: 25px; color: white; cursor: pointer; font-size: 40px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); z-index: 12000;" onclick="closeLightbox()">close</span>
     <div style="position: relative; text-align: center;">
         <img id="lbImg" src="">
         <div id="storyReactBar" style="display:none; margin-top: 20px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 50px; display: flex; gap: 20px; justify-content: center; width: fit-content; margin: 20px auto;">
@@ -323,14 +357,39 @@
     </div>
 </div>
 
+<div id="themeModal">
+    <div class="modal-card">
+        <h3 style="margin-top:0; font-size: 20px;">Customize Chat</h3>
+        <p style="color:var(--gr); font-size:14px; margin-bottom:20px;">Choose a theme for this conversation.</p>
+        <div class="theme-opt" onclick="setChatTheme('')">
+            <div class="theme-preview" style="background:#2e7d32;"></div>
+            <b>Classic Green</b>
+        </div>
+        <div class="theme-opt" onclick="setChatTheme('theme-ocean')">
+            <div class="theme-preview" style="background:linear-gradient(to right, #0288d1, #26c6da);"></div>
+            <b>Ocean Breeze</b>
+        </div>
+        <div class="theme-opt" onclick="setChatTheme('theme-sunset')">
+            <div class="theme-preview" style="background:linear-gradient(to right, #ff7043, #ffca28);"></div>
+            <b>Golden Sunset</b>
+        </div>
+        <div class="theme-opt" onclick="setChatTheme('theme-neon')">
+            <div class="theme-preview" style="background:linear-gradient(to right, #d500f9, #00e5ff);"></div>
+            <b>Neon Night</b>
+        </div>
+        <button class="btn" style="margin-top:15px; background:#f0f2f5; color:black; box-shadow:none;" onclick="document.getElementById('themeModal').style.display='none'">Cancel</button>
+    </div>
+</div>
+
 <div id="chat-window">
     <div class="chat-header">
         <span class="material-symbols-outlined" style="cursor:pointer;" onclick="closeChat()">arrow_back</span>
         <img id="chatAv" src="" style="width:35px;height:35px;border-radius:50%;object-fit:cover;">
-        <div>
+        <div style="flex:1">
             <b id="chatName">User</b><br>
             <small id="chatStatus" style="color:var(--gr); font-size:10px;"></small>
         </div>
+        <span class="material-symbols-outlined" style="cursor:pointer; color:var(--blue);" onclick="document.getElementById('themeModal').style.display='flex'">palette</span>
     </div>
     <div class="chat-body" id="chatBody"></div>
     <div id="typingIndicator" class="typing-indicator">Typing...</div>
@@ -545,16 +604,58 @@
     let searchQuery = ""; let activeChatId = null; let unsubMsgs = null; let unsubPresence = null;
     let activeStoryId = null;
 
+    // Offline & Connectivity Listeners
+    function checkConnectivity() {
+        if (!navigator.onLine) {
+            handleOfflineMode();
+        } else {
+            checkLogin();
+        }
+
+        window.addEventListener('offline', () => {
+            document.getElementById('offline-banner').style.display = 'block';
+            document.getElementById('offline-banner').innerText = "Working offline. Changes won't sync until reconnected.";
+        });
+
+        window.addEventListener('online', () => {
+            document.getElementById('offline-banner').style.backgroundColor = 'var(--green)';
+            document.getElementById('offline-banner').innerText = "Back Online!";
+            setTimeout(() => { 
+                document.getElementById('offline-banner').style.display = 'none'; 
+                document.getElementById('offline-banner').style.backgroundColor = '#323232';
+            }, 3000);
+        });
+    }
+
+    function handleOfflineMode() {
+        document.getElementById('offline-banner').style.display = 'block';
+        const savedUid = localStorage.getItem("chatbook_uid");
+        if (savedUid) {
+            // Load local dummy session to bypass auth if offline
+            curUser = JSON.parse(localStorage.getItem("chatbook_cached_user")) || { id: savedUid, n: "User (Offline)", av: "https://i.pravatar.cc/150" };
+            initApp();
+            // Load cached posts if any
+            const cachedPosts = JSON.parse(localStorage.getItem("chatbook_cached_posts"));
+            if (cachedPosts) renderFeed(cachedPosts);
+        } else {
+            document.getElementById('authLayer').style.display = 'flex';
+        }
+    }
+
     async function checkLogin() {
         const savedUid = localStorage.getItem("chatbook_uid");
         if (savedUid) {
             const doc = await db.collection("users").doc(savedUid).get();
             if (doc.exists) {
                 curUser = { id: doc.id, ...doc.data() };
+                localStorage.setItem("chatbook_cached_user", JSON.stringify(curUser));
                 initApp();
             } else {
                 localStorage.removeItem("chatbook_uid");
+                document.getElementById('authLayer').style.display = 'flex';
             }
+        } else {
+            document.getElementById('authLayer').style.display = 'flex';
         }
     }
 
@@ -570,13 +671,15 @@
         }
         if(curUser.locked) document.getElementById('lockToggle').checked = true;
 
-        updatePresence();
-        setInterval(updatePresence, 60000); 
-        sync();
+        if (navigator.onLine) {
+            updatePresence();
+            setInterval(updatePresence, 60000); 
+            sync();
+        }
     }
 
     async function updatePresence() {
-        if(curUser) {
+        if(curUser && navigator.onLine) {
             const isStealth = document.getElementById('stealthToggle').checked;
             await db.collection("users").doc(curUser.id).update({ 
                 lastSeen: isStealth ? 0 : Date.now() 
@@ -591,6 +694,7 @@
 
     function doLogout() {
         localStorage.removeItem("chatbook_uid");
+        localStorage.removeItem("chatbook_cached_user");
         location.reload();
     }
 
@@ -606,7 +710,7 @@
 
     async function toggleLock() {
         const isLocked = document.getElementById('lockToggle').checked;
-        await db.collection("users").doc(curUser.id).update({ locked: isLocked });
+        if(navigator.onLine) await db.collection("users").doc(curUser.id).update({ locked: isLocked });
         alert(isLocked ? "Profile Locked: Only friends can see your data." : "Profile Unlocked.");
     }
 
@@ -670,10 +774,10 @@
         if (storyId) {
             const story = allStories.find(s => s.id === storyId);
             rBar.style.display = 'flex';
-            insBtn.style.display = (story.uid === curUser.id) ? 'block' : 'none';
+            insBtn.style.display = (story && story.uid === curUser.id) ? 'block' : 'none';
             
             // Log view
-            if(story.uid !== curUser.id) {
+            if(story && story.uid !== curUser.id && navigator.onLine) {
                 let views = story.views || [];
                 if(!views.includes(curUser.id)) {
                     views.push(curUser.id);
@@ -686,6 +790,14 @@
         }
 
         lb.style.display = 'flex';
+    }
+
+    function closeLightbox() {
+        const lb = document.getElementById('lightbox');
+        lb.style.display = 'none';
+        activeStoryId = null;
+        document.getElementById('storyReactBar').style.display = 'none';
+        document.getElementById('viewInsightsBtn').style.display = 'none';
     }
 
     function openStoryInsights() {
@@ -715,7 +827,6 @@
         document.getElementById('insightModal').style.display = 'flex';
     }
 
-    // New Function: Open Post Interactions
     function openPostInteractions(pid) {
         const post = allPosts.find(p => p.id === pid);
         document.getElementById('insightTitle').innerText = "Post Interactions";
@@ -775,16 +886,19 @@
     }
 
     async function doLogin() {
+        if(!navigator.onLine) { alert("Internet connection required to login."); return; }
         const e = document.getElementById('lEmail').value, p = document.getElementById('lPass').value;
         const s = await db.collection("users").where("e","==",e).where("p","==",p).get();
         if(!s.empty) {
             curUser = { id: s.docs[0].id, ...s.docs[0].data() };
             localStorage.setItem("chatbook_uid", curUser.id);
+            localStorage.setItem("chatbook_cached_user", JSON.stringify(curUser));
             initApp();
         } else alert("Invalid Login");
     }
 
     async function doSignup() {
+        if(!navigator.onLine) { alert("Internet connection required to signup."); return; }
         const u = {
             n: document.getElementById('rName').value, e: document.getElementById('rEmail').value,
             p: document.getElementById('rPass').value, edu: document.getElementById('rEdu').value,
@@ -794,19 +908,24 @@
             lastSeen: Date.now(), friends: [], friendReqsSent: [], locked: false
         };
         const docRef = await db.collection("users").add(u);
-        localStorage.setItem("chatbook_uid", docRef.id);
-        location.reload();
+        const freshDoc = await docRef.get();
+        curUser = { id: docRef.id, ...freshDoc.data() };
+        localStorage.setItem("chatbook_uid", curUser.id);
+        localStorage.setItem("chatbook_cached_user", JSON.stringify(curUser));
+        initApp();
     }
 
     function sync() {
         db.collection("posts").orderBy("ts","desc").onSnapshot(s => {
             allPosts = s.docs.map(d => ({id: d.id, ...d.data()}));
+            localStorage.setItem("chatbook_cached_posts", JSON.stringify(allPosts));
             renderFeed(allPosts);
         });
         db.collection("users").onSnapshot(s => {
             allUsers = s.docs.map(d => ({id: d.id, ...d.data()}));
             if(curUser) {
                 curUser = allUsers.find(u => u.id === curUser.id);
+                localStorage.setItem("chatbook_cached_user", JSON.stringify(curUser));
                 renderPeople(allUsers);
                 renderFriendRequests();
                 renderChats();
@@ -843,32 +962,25 @@
     }
 
     async function uploadStory(input) {
+        if(!navigator.onLine) return;
         const file = input.files[0]; if(!file) return;
         const base64 = await compressImg(file, 800, 0.7);
         await db.collection("stories").add({ uid: curUser.id, u: curUser.n, av: curUser.av, img: base64, ts: Date.now(), reacts: [], views: [] });
     }
 
     async function addStoryReaction(emoji) {
-        if(!activeStoryId) return;
+        if(!activeStoryId || !navigator.onLine) return;
         const story = allStories.find(s => s.id === activeStoryId);
         let reacts = story.reacts || [];
-        
-        // Remove existing reaction from this user if any
         reacts = reacts.filter(r => r.uid !== curUser.id);
         reacts.push({ uid: curUser.id, u: curUser.n, emoji: emoji });
-        
         await db.collection("stories").doc(activeStoryId).update({ reacts: reacts });
         
-        // Show visual feedback
         const heart = document.createElement('div');
         heart.innerHTML = emoji;
-        heart.style.position = 'fixed';
-        heart.style.left = '50%';
-        heart.style.top = '50%';
-        heart.style.fontSize = '80px';
-        heart.style.transform = 'translate(-50%, -50%)';
-        heart.style.animation = 'reactPop 0.6s forwards';
-        heart.style.zIndex = '12000';
+        heart.style.position = 'fixed'; heart.style.left = '50%'; heart.style.top = '50%';
+        heart.style.fontSize = '80px'; heart.style.transform = 'translate(-50%, -50%)';
+        heart.style.animation = 'reactPop 0.6s forwards'; heart.style.zIndex = '12000';
         document.body.appendChild(heart);
         setTimeout(() => heart.remove(), 600);
     }
@@ -886,6 +998,7 @@
     }
 
     function renderFeed(data) {
+        if(!curUser) return;
         const myFriends = curUser.friends || [];
         const feed = data.filter(p => {
             const isOwner = p.uid === curUser.id;
@@ -902,8 +1015,7 @@
             const views = p.views || [];
             const myReact = reacts.find(r => r.uid === curUser.id);
             
-            // Log post view if not owner
-            if(p.uid !== curUser.id && !views.includes(curUser.id)) {
+            if(p.uid !== curUser.id && !views.includes(curUser.id) && navigator.onLine) {
                 db.collection("posts").doc(p.id).update({ views: firebase.firestore.FieldValue.arrayUnion(curUser.id) });
             }
 
@@ -1012,6 +1124,7 @@
     }
 
     async function saveEditPost(pid) {
+        if(!navigator.onLine) return;
         const newTxt = document.getElementById(`editArea-${pid}`).value;
         await db.collection("posts").doc(pid).update({ text: newTxt });
     }
@@ -1032,6 +1145,7 @@
     }
 
     async function saveEditComm(pid, cIdx) {
+        if(!navigator.onLine) return;
         const newTxt = document.getElementById(`editCommArea-${pid}-${cIdx}`).value;
         const post = allPosts.find(p => p.id === pid);
         let comms = [...post.comments];
@@ -1046,6 +1160,7 @@
     }
 
     async function addReply(pid, cIdx) {
+        if(!navigator.onLine) return;
         const inp = document.getElementById(`ri-${pid}-${cIdx}`); if(!inp.value) return;
         const post = allPosts.find(p => p.id === pid);
         let comms = [...post.comments];
@@ -1090,6 +1205,7 @@
     }
 
     async function acceptReq(uid) {
+        if(!navigator.onLine) return;
         const batch = db.batch();
         batch.update(db.collection("users").doc(curUser.id), { friends: firebase.firestore.FieldValue.arrayUnion(uid) });
         batch.update(db.collection("users").doc(uid), { friends: firebase.firestore.FieldValue.arrayUnion(curUser.id), friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
@@ -1097,10 +1213,12 @@
     }
 
     async function rejectReq(uid) {
+        if(!navigator.onLine) return;
         await db.collection("users").doc(uid).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
     }
 
     async function uploadPost() {
+        if(!navigator.onLine) { alert("Cannot post while offline."); return; }
         const t = document.getElementById('postTxt').value;
         const fImg = document.getElementById('postImg').files[0];
         const fVid = document.getElementById('postVid').files[0];
@@ -1122,6 +1240,7 @@
     }
 
     async function changeAv(input) {
+        if(!navigator.onLine) return;
         const file = input.files[0]; if(!file) return;
         const base64 = await compressImg(file, 600, 0.8);
         await db.collection("users").doc(curUser.id).update({ av: base64 });
@@ -1129,6 +1248,7 @@
     }
 
     async function addReaction(pid, emoji) {
+        if(!navigator.onLine) return;
         const post = allPosts.find(p => p.id === pid);
         let reacts = post.reacts || [];
         const idx = reacts.findIndex(r => r.uid === curUser.id);
@@ -1141,6 +1261,7 @@
     }
 
     async function addComm(id) {
+        if(!navigator.onLine) return;
         const inp = document.getElementById(`ci-${id}`); if(!inp.value) return;
         const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now(), replies: [] };
         await db.collection("posts").doc(id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c) });
@@ -1148,6 +1269,7 @@
     }
 
     async function toggleFriend() {
+        if(!navigator.onLine) return;
         const isFriend = (curUser.friends || []).includes(viewingId);
         const isSent = (curUser.friendReqsSent || []).includes(viewingId);
         if(isFriend) { if(confirm("Unfriend?")) {
@@ -1208,6 +1330,7 @@
     }
 
     async function saveProfile() {
+        if(!navigator.onLine) return;
         await db.collection("users").doc(curUser.id).update({
             bio: document.getElementById('eBio').value,
             edu: document.getElementById('eEdu').value,
@@ -1253,6 +1376,7 @@
     }
 
     async function handleTyping() {
+        if(!navigator.onLine) return;
         const chatId = [curUser.id, activeChatId].sort().join('_');
         await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: true }, { merge: true });
         clearTimeout(window.typingTimer);
@@ -1268,12 +1392,19 @@
         document.getElementById('chatName').innerText = target.n;
         document.getElementById('chat-window').style.display = 'flex';
         
+        // Restore saved theme for this user
+        const savedTheme = localStorage.getItem(`chat_theme_${uid}`) || '';
+        document.getElementById('chat-window').className = savedTheme;
+
+        if (!navigator.onLine) {
+            document.getElementById('chatBody').innerHTML = `<p style="text-align:center; padding:20px; color:var(--gr);">Messenger requires internet connection.</p>`;
+            return;
+        }
+
         const chatId = [curUser.id, uid].sort().join('_');
-        
         if(unsubMsgs) unsubMsgs();
         if(unsubPresence) unsubPresence();
 
-        // Typing & Info Sync
         unsubPresence = db.collection("chats").doc(chatId).onSnapshot(doc => {
             const data = doc.data();
             const isTyping = data && data[`typing_${uid}`];
@@ -1281,7 +1412,6 @@
             document.getElementById('chatStatus').innerText = target.lastSeen && (Date.now() - target.lastSeen < 300000) ? "Active now" : "Offline";
         });
 
-        // Message Sync
         unsubMsgs = db.collection("chats").doc(chatId).collection("messages").orderBy("ts", "asc").onSnapshot(s => {
             const msgs = s.docs.map(d => ({id: d.id, ...d.data()}));
             const body = document.getElementById('chatBody');
@@ -1289,21 +1419,39 @@
                 const isMe = m.sender === curUser.id;
                 const showSeen = isMe && idx === msgs.length - 1 && m.seen;
                 return `
-                <div class="msg-bubble ${isMe ? 'msg-sent' : 'msg-recv'}">
+                <div class="msg-bubble ${isMe ? 'msg-sent' : 'msg-recv'}" onclick="handleMsgClick('${m.id}', '${m.sender}')">
                     ${m.text ? m.text : ''}
-                    ${m.img ? `<img src="${m.img}" class="msg-img" onclick="viewImage('${m.img}')">` : ''}
+                    ${m.img ? `<img src="${m.img}" class="msg-img">` : ''}
                 </div>
                 ${showSeen ? `<div class="seen-receipt">Seen</div>` : ''}
             `}).join('');
             body.scrollTop = body.scrollHeight;
 
-            // Mark as seen
             s.docs.forEach(d => {
                 if(d.data().sender !== curUser.id && !d.data().seen) {
                     db.collection("chats").doc(chatId).collection("messages").doc(d.id).update({ seen: true });
                 }
             });
         });
+    }
+
+    function setChatTheme(themeName) {
+        document.getElementById('chat-window').className = themeName;
+        if(activeChatId) localStorage.setItem(`chat_theme_${activeChatId}`, themeName);
+        document.getElementById('themeModal').style.display = 'none';
+    }
+
+    async function handleMsgClick(msgId, senderId) {
+        if(senderId === curUser.id) {
+            if(confirm("Delete this message for everyone?")) {
+                const chatId = [curUser.id, activeChatId].sort().join('_');
+                await db.collection("chats").doc(chatId).collection("messages").doc(msgId).delete();
+            }
+        } else {
+            // If it's an image from others, allow zoom
+            const msg = document.querySelector(`[onclick*="${msgId}"] img`);
+            if(msg) viewImage(msg.src);
+        }
     }
 
     function closeChat() {
@@ -1314,30 +1462,26 @@
     }
 
     async function sendMsg() {
+        if(!navigator.onLine) return;
         const inp = document.getElementById('mInp');
         const txt = inp.value.trim();
         if(!txt || !activeChatId) return;
         
         const chatId = [curUser.id, activeChatId].sort().join('_');
         await db.collection("chats").doc(chatId).collection("messages").add({
-            sender: curUser.id,
-            text: txt,
-            ts: Date.now(),
-            seen: false
+            sender: curUser.id, text: txt, ts: Date.now(), seen: false
         });
         inp.value = "";
     }
 
     async function sendImgMsg() {
+        if(!navigator.onLine) return;
         const file = document.getElementById('msgImgInp').files[0];
         if(!file || !activeChatId) return;
         const b64 = await compressImg(file, 600, 0.7);
         const chatId = [curUser.id, activeChatId].sort().join('_');
         await db.collection("chats").doc(chatId).collection("messages").add({
-            sender: curUser.id,
-            img: b64,
-            ts: Date.now(),
-            seen: false
+            sender: curUser.id, img: b64, ts: Date.now(), seen: false
         });
     }
 

@@ -347,10 +347,41 @@
         #chat-window { position: fixed; inset: 0; background: white; z-index: 2000; display: none; flex-direction: column; }
         .chat-header { padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; background: white; position: sticky; top: 0; }
         .chat-body { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: var(--msg-bg); }
-        .msg-bubble { max-width: 75%; padding: 10px 15px; border-radius: 18px; font-size: 14px; position: relative; line-height: 1.4; cursor: pointer; }
+        .msg-bubble { max-width: 75%; padding: 10px 15px; border-radius: 18px; font-size: 14px; position: relative; line-height: 1.4; cursor: pointer; user-select: none; }
         .msg-sent { align-self: flex-end; background: var(--msg-sent-bg); color: var(--msg-sent-text); border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .msg-recv { align-self: flex-start; background: white; color: black; border-bottom-left-radius: 4px; border: 1px solid #ddd; }
         .chat-footer { padding: 10px; border-top: 1px solid #eee; display: flex; gap: 10px; background: white; align-items: center; }
+
+        /* Context Menu Styles */
+        #msgMenu {
+            position: fixed;
+            z-index: 15000;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            width: 180px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+            flex-direction: column;
+            padding: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+            animation: menuPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes menuPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .menu-item {
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .menu-item:hover { background: #f0f2f5; }
+        .menu-item.danger { color: var(--red); }
+        .menu-item span { font-size: 20px; }
 
         /* Theme Option Cards */
         .theme-opt { display: flex; align-items: center; gap: 15px; padding: 12px; border-radius: 12px; cursor: pointer; border: 2px solid #eee; margin-bottom: 10px; }
@@ -435,6 +466,14 @@
     </div>
 </div>
 
+<div id="msgMenu">
+    <div class="menu-item" onclick="menuAction('reply')"><span class="material-symbols-outlined">reply</span> Reply</div>
+    <div class="menu-item" onclick="menuAction('forward')"><span class="material-symbols-outlined">forward</span> Forward</div>
+    <div class="menu-item" onclick="menuAction('pin')"><span class="material-symbols-outlined">push_pin</span> Pin</div>
+    <div class="menu-item danger" onclick="menuAction('deleteMe')"><span class="material-symbols-outlined">delete</span> Delete for me</div>
+    <div id="unsendOpt" class="menu-item danger" onclick="menuAction('unsend')"><span class="material-symbols-outlined">cancel</span> Unsend</div>
+</div>
+
 <div id="insightModal">
     <div class="modal-card">
         <h3 id="insightTitle" style="margin-top:0; font-size: 20px;">Insights</h3>
@@ -477,7 +516,7 @@
         </div>
         <span class="material-symbols-outlined" style="cursor:pointer; color:var(--blue);" onclick="document.getElementById('themeModal').style.display='flex'">palette</span>
     </div>
-    <div class="chat-body" id="chatBody"></div>
+    <div class="chat-body" id="chatBody" onclick="closeMsgMenu()"></div>
     <div id="typingIndicator" class="typing-indicator">Typing...</div>
     <div class="chat-footer">
         <label style="cursor:pointer; color:var(--blue);"><span class="material-symbols-outlined">image</span><input type="file" id="msgImgInp" hidden accept="image/*" onchange="sendImgMsg()"></label>
@@ -689,6 +728,9 @@
     let curUser = null; let allPosts = []; let allUsers = []; let allStories = []; let viewingId = null;
     let searchQuery = ""; let activeChatId = null; let unsubMsgs = null; let unsubPresence = null;
     let activeStoryId = null;
+    let longPressTimer;
+    let selectedMsgId = null;
+    let selectedMsgSender = null;
 
     // Static Assets for Messenger
     const msgAssets = {
@@ -1493,7 +1535,6 @@
         document.getElementById('chatName').innerText = target.n;
         document.getElementById('chat-window').style.display = 'flex';
         
-        // Restore saved theme for this user
         const savedTheme = localStorage.getItem(`chat_theme_${uid}`) || '';
         document.getElementById('chat-window').className = savedTheme;
 
@@ -1517,14 +1558,18 @@
             const msgs = s.docs.map(d => ({id: d.id, ...d.data()}));
             const body = document.getElementById('chatBody');
             
-            // Header Image Logic for New Chats
             let headerImg = msgs.length === 0 ? `<div style="text-align:center; padding:20px;"><img src="${msgAssets.banner}" style="width:100%; border-radius:15px; margin-bottom:10px; opacity:0.8;"><p style="font-size:12px; color:var(--gr);">Say hello to ${target.n}!</p></div>` : '';
 
             body.innerHTML = headerImg + msgs.map((m, idx) => {
                 const isMe = m.sender === curUser.id;
                 const showSeen = isMe && idx === msgs.length - 1 && m.seen;
                 return `
-                <div class="msg-bubble ${isMe ? 'msg-sent' : 'msg-recv'}" onclick="handleMsgClick('${m.id}', '${m.sender}')">
+                <div class="msg-bubble ${isMe ? 'msg-sent' : 'msg-recv'}" 
+                     onmousedown="handleTouchStart(event, '${m.id}', '${m.sender}')" 
+                     ontouchstart="handleTouchStart(event, '${m.id}', '${m.sender}')"
+                     onmouseup="handleTouchEnd()"
+                     ontouchend="handleTouchEnd()"
+                     oncontextmenu="event.preventDefault(); showMsgMenu(event, '${m.id}', '${m.sender}')">
                     ${m.text ? m.text : ''}
                     ${m.img ? `<img src="${m.img}" class="msg-img">` : ''}
                 </div>
@@ -1540,22 +1585,82 @@
         });
     }
 
+    /* Long Press / Context Menu Logic */
+    function handleTouchStart(e, id, sender) {
+        longPressTimer = setTimeout(() => {
+            showMsgMenu(e, id, sender);
+        }, 500);
+    }
+
+    function handleTouchEnd() {
+        clearTimeout(longPressTimer);
+    }
+
+    function showMsgMenu(e, id, sender) {
+        e.preventDefault();
+        selectedMsgId = id;
+        selectedMsgSender = sender;
+        const menu = document.getElementById('msgMenu');
+        const unsendOpt = document.getElementById('unsendOpt');
+
+        // Logic for "Unsend" (Only for my own messages)
+        unsendOpt.style.display = (sender === curUser.id) ? 'flex' : 'none';
+
+        // Position the menu
+        let x = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+        let y = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+        // Bound checking
+        if (x + 180 > window.innerWidth) x = window.innerWidth - 190;
+        if (y + 200 > window.innerHeight) y = window.innerHeight - 210;
+
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+        menu.style.display = 'flex';
+
+        // Trigger Haptic Feedback if available
+        if (window.navigator.vibrate) window.navigator.vibrate(50);
+    }
+
+    function closeMsgMenu() {
+        document.getElementById('msgMenu').style.display = 'none';
+    }
+
+    async function menuAction(type) {
+        if (!selectedMsgId || !navigator.onLine) return;
+        const chatId = [curUser.id, activeChatId].sort().join('_');
+        
+        switch(type) {
+            case 'unsend':
+                if(confirm("Unsend message for everyone?")) {
+                    await db.collection("chats").doc(chatId).collection("messages").doc(selectedMsgId).delete();
+                }
+                break;
+            case 'deleteMe':
+                if(confirm("Delete message for you?")) {
+                    // Logic for local hiding (in a real app, you'd track 'deletedFor' array)
+                    const el = document.querySelector(`[onmousedown*="${selectedMsgId}"]`);
+                    if(el) el.parentElement.style.display = 'none';
+                }
+                break;
+            case 'reply':
+                document.getElementById('mInp').focus();
+                document.getElementById('mInp').placeholder = "Replying to message...";
+                break;
+            case 'forward':
+                alert("Forwarding logic: Select a friend to forward this message.");
+                break;
+            case 'pin':
+                alert("Message pinned to chat.");
+                break;
+        }
+        closeMsgMenu();
+    }
+
     function setChatTheme(themeName) {
         document.getElementById('chat-window').className = themeName;
         if(activeChatId) localStorage.setItem(`chat_theme_${activeChatId}`, themeName);
         document.getElementById('themeModal').style.display = 'none';
-    }
-
-    async function handleMsgClick(msgId, senderId) {
-        if(senderId === curUser.id) {
-            if(confirm("Delete this message for everyone?")) {
-                const chatId = [curUser.id, activeChatId].sort().join('_');
-                await db.collection("chats").doc(chatId).collection("messages").doc(msgId).delete();
-            }
-        } else {
-            const msg = document.querySelector(`[onclick*="${msgId}"] img`);
-            if(msg) viewImage(msg.src);
-        }
     }
 
     function closeChat() {
@@ -1576,6 +1681,7 @@
             sender: curUser.id, text: txt, ts: Date.now(), seen: false
         });
         inp.value = "";
+        inp.placeholder = "Type a message...";
     }
 
     async function sendImgMsg() {

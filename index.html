@@ -1571,7 +1571,7 @@
                      ontouchend="handleTouchEnd()"
                      oncontextmenu="event.preventDefault(); showMsgMenu(event, '${m.id}', '${m.sender}')">
                     ${m.text ? m.text : ''}
-                    ${m.img ? `<img src="${m.img}" class="msg-img">` : ''}
+                    ${m.img ? `<img src="${m.img}" class="msg-img" onclick="viewImage(this.src)">` : ''}
                 </div>
                 ${showSeen ? `<div class="seen-receipt">Seen</div>` : ''}
             `}).join('');

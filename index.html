@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="X-Frame-Options" content="DENY">
     <title>Chatbook | Pro Edition</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -725,7 +726,27 @@
 </div>
 
 <script>
-    const cfg = { apiKey: "AIzaSyBO0D2WarLVknFLMwW6iKsPUYGZbgEsJLo", projectId: "chatbook-78d49" };
+    /** * SECURITY HARDENING LAYER
+     * 1. Protect Firebase Configuration from Console manipulation
+     * 2. Basic XSS protection for text rendering
+     * 3. Redirect to HTTPS if accessed over HTTP
+     */
+    if (window.location.protocol === "http:" && window.location.hostname !== "localhost") {
+        window.location.href = window.location.href.replace("http:", "https:");
+    }
+
+    const cfg = Object.freeze({ 
+        apiKey: "AIzaSyBO0D2WarLVknFLMwW6iKsPUYGZbgEsJLo", 
+        projectId: "chatbook-78d49" 
+    });
+
+    function cleanXSS(str) {
+        if (!str) return "";
+        const div = document.createElement('div');
+        div.innerText = str;
+        return div.innerHTML;
+    }
+
     if (!firebase.apps.length) { firebase.initializeApp(cfg); }
     const db = firebase.firestore();
 
@@ -888,7 +909,6 @@
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = () => {
-                // Modified: 1MB limit check (1 * 1024 * 1024 bytes)
                 if (reader.result.length > 1 * 1024 * 1024) { 
                     reject("Video is too heavy for Firestore (Max 1MB allowed).");
                 } else {
@@ -1038,9 +1058,9 @@
     async function doSignup() {
         if(!navigator.onLine) { alert("Internet connection required to signup."); return; }
         const u = {
-            n: document.getElementById('rName').value, e: document.getElementById('rEmail').value,
-            p: document.getElementById('rPass').value, edu: document.getElementById('rEdu').value,
-            work: document.getElementById('rWork').value, status: document.getElementById('rStatus').value,
+            n: cleanXSS(document.getElementById('rName').value), e: document.getElementById('rEmail').value,
+            p: document.getElementById('rPass').value, edu: cleanXSS(document.getElementById('rEdu').value),
+            work: cleanXSS(document.getElementById('rWork').value), status: document.getElementById('rStatus').value,
             birth: document.getElementById('rBirth').value, sex: document.getElementById('rSex').value,
             verified: "none", av: "https://i.pravatar.cc/150", bio: "Available", ts: Date.now(),
             lastSeen: Date.now(), friends: [], friendReqsSent: [], locked: false
@@ -1177,7 +1197,7 @@
                 </div>
                 
                 <div id="pTxtContainer-${p.id}">
-                    <p style="margin:15px 0; line-height: 1.5; font-size: 15px;">${p.text}</p>
+                    <p style="margin:15px 0; line-height: 1.5; font-size: 15px;">${cleanXSS(p.text)}</p>
                 </div>
 
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
@@ -1224,7 +1244,7 @@
                     <div style="flex:1">
                         <div style="background:#f0f2f5; padding:10px 14px; border-radius:18px; font-size:14px; display: inline-block; max-width: 100%;">
                             <b>${c.u}</b><br>
-                            <span id="cTxt-${pid}-${idx}">${c.text}</span>
+                            <span id="cTxt-${pid}-${idx}">${cleanXSS(c.text)}</span>
                         </div>
                         <div style="font-size:12px; color:var(--gr); margin-left:12px; margin-top:4px; font-weight: 600;">
                             <span style="cursor:pointer;" onclick="showReplyBox('${pid}', ${idx})">Reply</span> 
@@ -1237,7 +1257,7 @@
                     ${(c.replies || []).map(r => `
                         <div class="reply-box" style="display:flex; gap:8px; margin-top:8px;">
                             <img src="${r.av}" style="width:24px;height:24px;border-radius:50%; object-fit: cover;">
-                            <div style="background:#f0f2f5; padding:8px 12px; border-radius:15px; font-size:13px; display: inline-block;"><b>${r.u}</b> ${r.text}</div>
+                            <div style="background:#f0f2f5; padding:8px 12px; border-radius:15px; font-size:13px; display: inline-block;"><b>${r.u}</b> ${cleanXSS(r.text)}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -1441,11 +1461,11 @@
             document.getElementById('uMeta').innerHTML = `<div style="color:var(--red); font-weight:bold;">🔒 Profile is Private</div>`;
             document.getElementById('uPosts').innerHTML = `<div class="card" style="text-align:center; color:var(--gr);">Add ${u.n} to see their posts.</div>`;
         } else {
-            document.getElementById('uMeta').innerHTML = `<div>🎓 ${u.edu || 'No education provided'}</div><div>💼 ${u.work || 'No work info'}</div><div>❤️ ${u.status}</div><div>🎂 ${getAge(u.birth)}</div>`;
+            document.getElementById('uMeta').innerHTML = `<div>🎓 ${cleanXSS(u.edu) || 'No education provided'}</div><div>💼 ${cleanXSS(u.work) || 'No work info'}</div><div>❤️ ${u.status}</div><div>🎂 ${getAge(u.birth)}</div>`;
             const myPosts = allPosts.filter(p => p.uid === uid);
             document.getElementById('uPosts').innerHTML = myPosts.map(p => `
                 <div class="card">
-                    <p style="font-size: 15px; line-height: 1.5;">${p.text}</p>
+                    <p style="font-size: 15px; line-height: 1.5;">${cleanXSS(p.text)}</p>
                     ${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}
                     ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="auto" playsinline style="will-change: transform; transform: translateZ(0);"></video>` : ''}
                     <div style="font-size:11px; color:#999; margin-top:8px; font-weight: 500;">${fmtTime(p.ts)} • ${p.priv}</div>
@@ -1478,9 +1498,9 @@
     async function saveProfile() {
         if(!navigator.onLine) return;
         await db.collection("users").doc(curUser.id).update({
-            bio: document.getElementById('eBio').value,
-            edu: document.getElementById('eEdu').value,
-            work: document.getElementById('eWork').value,
+            bio: cleanXSS(document.getElementById('eBio').value),
+            edu: cleanXSS(document.getElementById('eEdu').value),
+            work: cleanXSS(document.getElementById('eWork').value),
             status: document.getElementById('eStatus').value
         });
         document.getElementById('editModal').style.display = 'none';
@@ -1573,7 +1593,7 @@
                      onmouseup="handleTouchEnd()"
                      ontouchend="handleTouchEnd()"
                      oncontextmenu="event.preventDefault(); showMsgMenu(event, '${m.id}', '${m.sender}')">
-                    ${m.text ? m.text : ''}
+                    ${m.text ? cleanXSS(m.text) : ''}
                     ${m.img ? `<img src="${m.img}" class="msg-img" onclick="viewImage(this.src)">` : ''}
                 </div>
                 ${showSeen ? `<div class="seen-receipt">Seen</div>` : ''}

@@ -895,9 +895,6 @@
         });
     }
 
-    /* * 10MB VIDEO CHUNKED LOGIC
-    * Splits large video strings into multiple Firestore docs (10x Docs)
-    */
     async function compressVideo(file) {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
@@ -918,7 +915,7 @@
                 const stream = canvas.captureStream();
                 const recorder = new MediaRecorder(stream, {
                     mimeType: 'video/webm;codecs=vp8',
-                    bitsPerSecond: 800000 // Higher bitrate for 10MB limit
+                    bitsPerSecond: 800000 // Optimized for chunking
                 });
 
                 const chunks = [];
@@ -929,7 +926,7 @@
                     reader.readAsDataURL(blob);
                     reader.onloadend = () => {
                         const base64 = reader.result;
-                        // Limit to ~10MB instead of 1.3MB
+                        // Support for 10MB limit via chunking logic below
                         if (base64.length > 13000000) { 
                             reject("Video exceeds 10MB limit.");
                         } else {
@@ -1107,13 +1104,11 @@
         initApp();
     }
 
-    /* * SYNC Logic enhanced to fetch video chunks automatically 
-    */
     function sync() {
         db.collection("posts").orderBy("ts","desc").onSnapshot(async s => {
             const rawPosts = s.docs.map(d => ({id: d.id, ...d.data()}));
             
-            // Reconstruct chunked videos
+            // Reconstruct chunked videos for display
             for(let p of rawPosts) {
                 if(p.isChunked && p.chunkCount) {
                     const chunkSnap = await db.collection("post_chunks").doc(p.id).collection("data").orderBy("idx").get();
@@ -1421,9 +1416,6 @@
         await db.collection("users").doc(uid).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
     }
 
-    /* * 10MB CHUNKED UPLOAD 
-    * Logic split: Master Post + Sub-collection of Chunks
-    */
     async function uploadPost() {
         if(!navigator.onLine) { alert("Cannot post while offline."); return; }
         const t = document.getElementById('postTxt').value;
@@ -1436,12 +1428,8 @@
         
         let imgB64 = fImg ? await compressImg(fImg) : null;
         let vidB64 = null;
-        try {
-            vidB64 = fVid ? await compressVideo(fVid) : null;
-        } catch(e) {
-            alert(e);
-            btn.innerText = "Post"; btn.disabled = false;
-            return;
+        try { vidB64 = fVid ? await compressVideo(fVid) : null; } catch(e) { 
+            alert(e); btn.innerText = "Post"; btn.disabled = false; return; 
         }
 
         const postData = { 
@@ -1450,22 +1438,16 @@
         };
 
         if(vidB64) {
-            if(vidB64.length > 900000) { // If > ~900KB, use chunking
-                postData.isChunked = true;
-                const chunkSize = 800000; // 800KB safe margin
-                const totalChunks = Math.ceil(vidB64.length / chunkSize);
-                postData.chunkCount = totalChunks;
-                
-                const masterPost = await db.collection("posts").add(postData);
-                for(let i = 0; i < totalChunks; i++) {
-                    const chunk = vidB64.substring(i * chunkSize, (i + 1) * chunkSize);
-                    await db.collection("post_chunks").doc(masterPost.id).collection("data").add({
-                        part: chunk, idx: i
-                    });
-                }
-            } else {
-                postData.vid = vidB64;
-                await db.collection("posts").add(postData);
+            // Master-Chunking for 10MB Support
+            postData.isChunked = true;
+            const chunkSize = 600000; // Safe chunk under 1MB limit
+            const totalChunks = Math.ceil(vidB64.length / chunkSize);
+            postData.chunkCount = totalChunks;
+            
+            const masterPost = await db.collection("posts").add(postData);
+            for(let i = 0; i < totalChunks; i++) {
+                const chunk = vidB64.substring(i * chunkSize, (i + 1) * chunkSize);
+                await db.collection("post_chunks").doc(masterPost.id).collection("data").add({ part: chunk, idx: i });
             }
         } else {
             await db.collection("posts").add(postData);
@@ -1581,7 +1563,6 @@
     async function deletePost(pid) { 
         if(confirm("Delete this post?")) {
             await db.collection("posts").doc(pid).delete();
-            // Clean up chunks if any
             const chunks = await db.collection("post_chunks").doc(pid).collection("data").get();
             chunks.forEach(async d => await d.ref.delete());
         }
@@ -1636,15 +1617,10 @@
         document.getElementById('chatAv').src = target.av;
         document.getElementById('chatName').innerText = target.n;
         document.getElementById('chat-window').style.display = 'flex';
-        
         const savedTheme = localStorage.getItem(`chat_theme_${uid}`) || '';
         document.getElementById('chat-window').className = savedTheme;
 
-        if (!navigator.onLine) {
-            document.getElementById('chatBody').innerHTML = `<p style="text-align:center; padding:20px; color:var(--gr);">Connection required.</p>`;
-            return;
-        }
-
+        if (!navigator.onLine) return;
         const chatId = [curUser.id, uid].sort().join('_');
         if(unsubMsgs) unsubMsgs();
         if(unsubPresence) unsubPresence();
@@ -1677,7 +1653,6 @@
                 ${showSeen ? `<div class="seen-receipt">Seen</div>` : ''}
             `}).join('');
             body.scrollTop = body.scrollHeight;
-
             s.docs.forEach(d => {
                 if(d.data().sender !== curUser.id && !d.data().seen) {
                     db.collection("chats").doc(chatId).collection("messages").doc(d.id).update({ seen: true });
@@ -1691,23 +1666,15 @@
 
     function showMsgMenu(e, id, sender) {
         if(e) e.preventDefault();
-        selectedMsgId = id;
-        selectedMsgSender = sender;
+        selectedMsgId = id; selectedMsgSender = sender;
         const menu = document.getElementById('msgMenu');
         const unsendOpt = document.getElementById('unsendOpt');
         unsendOpt.style.display = (sender === curUser.id) ? 'flex' : 'none';
         let x, y;
-        if (e && e.touches && e.touches.length > 0) {
-            x = e.touches[0].clientX; y = e.touches[0].clientY;
-        } else if (e && e.clientX) {
-            x = e.clientX; y = e.clientY;
-        } else {
-            x = window.innerWidth / 2 - 90; y = window.innerHeight / 2 - 100;
-        }
-        if (x + 190 > window.innerWidth) x = window.innerWidth - 190;
-        if (y + 220 > window.innerHeight) y = window.innerHeight - 230;
-        menu.style.left = x + 'px'; menu.style.top = y + 'px';
-        menu.style.display = 'flex';
+        if (e && e.touches && e.touches.length > 0) { x = e.touches[0].clientX; y = e.touches[0].clientY; }
+        else if (e && e.clientX) { x = e.clientX; y = e.clientY; }
+        else { x = window.innerWidth / 2 - 90; y = window.innerHeight / 2 - 100; }
+        menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'flex';
         if (window.navigator.vibrate) window.navigator.vibrate(40);
     }
 
@@ -1717,15 +1684,8 @@
         if (!selectedMsgId || !navigator.onLine) return;
         const chatId = [curUser.id, activeChatId].sort().join('_');
         switch(type) {
-            case 'unsend':
-                if(confirm("Unsend message?")) await db.collection("chats").doc(chatId).collection("messages").doc(selectedMsgId).delete();
-                break;
-            case 'deleteMe':
-                if(confirm("Delete for you?")) {
-                    const el = document.querySelector(`[onmousedown*="${selectedMsgId}"]`);
-                    if(el) el.parentElement.style.display = 'none';
-                }
-                break;
+            case 'unsend': if(confirm("Unsend message?")) await db.collection("chats").doc(chatId).collection("messages").doc(selectedMsgId).delete(); break;
+            case 'deleteMe': if(confirm("Delete for you?")) { const el = document.querySelector(`[onmousedown*="${selectedMsgId}"]`); if(el) el.parentElement.style.display = 'none'; } break;
             case 'reply': document.getElementById('mInp').focus(); break;
         }
         closeMsgMenu();
@@ -1737,22 +1697,14 @@
         document.getElementById('themeModal').style.display = 'none';
     }
 
-    function closeChat() {
-        document.getElementById('chat-window').style.display = 'none';
-        if(unsubMsgs) unsubMsgs();
-        if(unsubPresence) unsubPresence();
-        activeChatId = null;
-    }
+    function closeChat() { document.getElementById('chat-window').style.display = 'none'; if(unsubMsgs) unsubMsgs(); if(unsubPresence) unsubPresence(); activeChatId = null; }
 
     async function sendMsg() {
         if(!navigator.onLine) return;
-        const inp = document.getElementById('mInp');
-        const txt = inp.value.trim();
+        const inp = document.getElementById('mInp'); const txt = inp.value.trim();
         if(!txt || !activeChatId) return;
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        await db.collection("chats").doc(chatId).collection("messages").add({
-            sender: curUser.id, text: txt, ts: Date.now(), seen: false
-        });
+        await db.collection("chats").doc(chatId).collection("messages").add({ sender: curUser.id, text: txt, ts: Date.now(), seen: false });
         inp.value = "";
     }
 
@@ -1762,9 +1714,7 @@
         if(!file || !activeChatId) return;
         const b64 = await compressImg(file, 600, 0.7);
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        await db.collection("chats").doc(chatId).collection("messages").add({
-            sender: curUser.id, img: b64, ts: Date.now(), seen: false
-        });
+        await db.collection("chats").doc(chatId).collection("messages").add({ sender: curUser.id, img: b64, ts: Date.now(), seen: false });
     }
 
     function startChatFromProfile() { openChat(viewingId); }

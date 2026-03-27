@@ -516,7 +516,7 @@
         <span class="material-symbols-outlined" style="cursor:pointer;" onclick="closeChat()">arrow_back</span>
         <img id="chatAv" src="" style="width:35px;height:35px;border-radius:50%;object-fit:cover;">
         <div style="flex:1">
-            <getTick(u) id="chatName">User</getTick(u)><br>
+            <span id="chatName">User</span><br>
             <small id="chatStatus" style="color:var(--gr); font-size:10px;"></small>
         </div>
         <span class="material-symbols-outlined" style="cursor:pointer; color:var(--blue);" onclick="document.getElementById('themeModal').style.display='flex'">palette</span>
@@ -726,11 +726,6 @@
 </div>
 
 <script>
-    /** * SECURITY HARDENING LAYER
-     * 1. Protect Firebase Configuration from Console manipulation
-     * 2. Basic XSS protection for text rendering
-     * 3. Redirect to HTTPS if accessed over HTTP
-     */
     if (window.location.protocol === "http:" && window.location.hostname !== "localhost") {
         window.location.href = window.location.href.replace("http:", "https:");
     }
@@ -757,20 +752,17 @@
     let selectedMsgId = null;
     let selectedMsgSender = null;
 
-    // Static Assets for Messenger
     const msgAssets = {
         banner: "input_file_0.png",
         profile: "input_file_1.png"
     };
 
-    // Loading screen handler
     function hideLoader() {
         const loader = document.getElementById('loadingLayer');
         loader.style.opacity = '0';
         setTimeout(() => loader.style.display = 'none', 800);
     }
 
-    // Offline & Connectivity Listeners
     function checkConnectivity() {
         if (!navigator.onLine) {
             handleOfflineMode();
@@ -831,7 +823,6 @@
         document.getElementById('mainApp').style.display='block';
         document.getElementById('postBoxAv').src = curUser.av;
         
-        // Sync setting states
         if(localStorage.getItem('chatbook_dark') === 'true') {
             document.body.classList.add('dark-mode');
             document.getElementById('darkModeToggle').checked = true;
@@ -843,7 +834,7 @@
             setInterval(updatePresence, 60000); 
             sync();
         }
-        hideLoader(); // Hide loader after data sync starts
+        hideLoader(); 
     }
 
     async function updatePresence() {
@@ -904,22 +895,22 @@
         });
     }
 
+    /* * 10MB VIDEO CHUNKED LOGIC
+    * Splits large video strings into multiple Firestore docs (10x Docs)
+    */
     async function compressVideo(file) {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            if (!window.MediaRecorder) {
-                return reject("Browser does not support video compression.");
-            }
+            if (!window.MediaRecorder) return reject("Browser not supported.");
 
             video.src = URL.createObjectURL(file);
             video.muted = true;
             video.preload = 'auto';
 
             video.onloadedmetadata = () => {
-                // High compression: Force max height to 480p
                 const scale = Math.min(1, 480 / video.videoHeight);
                 canvas.width = video.videoWidth * scale;
                 canvas.height = video.videoHeight * scale;
@@ -927,7 +918,7 @@
                 const stream = canvas.captureStream();
                 const recorder = new MediaRecorder(stream, {
                     mimeType: 'video/webm;codecs=vp8',
-                    bitsPerSecond: 250000 // 250kbps for small file size
+                    bitsPerSecond: 800000 // Higher bitrate for 10MB limit
                 });
 
                 const chunks = [];
@@ -938,9 +929,9 @@
                     reader.readAsDataURL(blob);
                     reader.onloadend = () => {
                         const base64 = reader.result;
-                        // Limit to ~1MB
-                        if (base64.length > 1300000) { 
-                            reject("Video is too long to stay under 1MB even with compression.");
+                        // Limit to ~10MB instead of 1.3MB
+                        if (base64.length > 13000000) { 
+                            reject("Video exceeds 10MB limit.");
                         } else {
                             resolve(base64);
                         }
@@ -960,8 +951,6 @@
                 };
                 drawFrame();
             };
-
-            video.onerror = () => reject("Failed to load video file.");
         });
     }
 
@@ -979,8 +968,6 @@
             const story = allStories.find(s => s.id === storyId);
             rBar.style.display = 'flex';
             insBtn.style.display = (story && story.uid === curUser.id) ? 'block' : 'none';
-            
-            // Log view
             if(story && story.uid !== curUser.id && navigator.onLine) {
                 let views = story.views || [];
                 if(!views.includes(curUser.id)) {
@@ -1084,13 +1071,14 @@
     }
 
     function getTick(u) {
+        if(!u) return "";
         if(u.n && u.n.toLowerCase() === 'fidahakim') return `<span class="material-symbols-outlined" style="color:var(--blue); font-variation-settings:'FILL' 1; font-size:18px;">verified</span>`;
         if(u.verified === 'green') return `<span class="material-symbols-outlined" style="color:var(--green); font-variation-settings:'FILL' 1; font-size:18px;">verified</span>`;
         return "";
     }
 
     async function doLogin() {
-        if(!navigator.onLine) { alert("Internet connection required to login."); return; }
+        if(!navigator.onLine) { alert("Internet connection required."); return; }
         const e = document.getElementById('lEmail').value, p = document.getElementById('lPass').value;
         const s = await db.collection("users").where("e","==",e).where("p","==",p).get();
         if(!s.empty) {
@@ -1102,7 +1090,7 @@
     }
 
     async function doSignup() {
-        if(!navigator.onLine) { alert("Internet connection required to signup."); return; }
+        if(!navigator.onLine) return;
         const u = {
             n: cleanXSS(document.getElementById('rName').value), e: document.getElementById('rEmail').value,
             p: document.getElementById('rPass').value, edu: cleanXSS(document.getElementById('rEdu').value),
@@ -1119,9 +1107,21 @@
         initApp();
     }
 
+    /* * SYNC Logic enhanced to fetch video chunks automatically 
+    */
     function sync() {
-        db.collection("posts").orderBy("ts","desc").onSnapshot(s => {
-            allPosts = s.docs.map(d => ({id: d.id, ...d.data()}));
+        db.collection("posts").orderBy("ts","desc").onSnapshot(async s => {
+            const rawPosts = s.docs.map(d => ({id: d.id, ...d.data()}));
+            
+            // Reconstruct chunked videos
+            for(let p of rawPosts) {
+                if(p.isChunked && p.chunkCount) {
+                    const chunkSnap = await db.collection("post_chunks").doc(p.id).collection("data").orderBy("idx").get();
+                    p.vid = chunkSnap.docs.map(d => d.data().part).join('');
+                }
+            }
+
+            allPosts = rawPosts;
             localStorage.setItem("chatbook_cached_posts", JSON.stringify(allPosts));
             renderFeed(allPosts);
         });
@@ -1231,7 +1231,7 @@
                         <div style="position:absolute; bottom:0; right:0;">${getStatusDot(author)}</div>
                     </div>
                     <div style="flex:1">
-                        <getTick(u) onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="cursor:pointer; font-size: 15px;">${author.n}${getTick(author)}</getTick(u)>
+                        <span onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="cursor:pointer; font-size: 15px;"><b>${author.n}</b>${getTick(author)}</span>
                         <div style="font-size:11px; color:var(--gr); font-weight: 500;">${fmtTime(p.ts)} • ${p.priv === 'public' ? '🌍' : (p.priv === 'friends' ? '👥' : '🔒')}</div>
                     </div>
                     ${p.uid === curUser.id ? `
@@ -1421,6 +1421,9 @@
         await db.collection("users").doc(uid).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
     }
 
+    /* * 10MB CHUNKED UPLOAD 
+    * Logic split: Master Post + Sub-collection of Chunks
+    */
     async function uploadPost() {
         if(!navigator.onLine) { alert("Cannot post while offline."); return; }
         const t = document.getElementById('postTxt').value;
@@ -1429,7 +1432,7 @@
         if(!t && !fImg && !fVid) return;
         
         const btn = document.getElementById('uploadBtn');
-        btn.innerText = "Processing..."; btn.disabled = true;
+        btn.innerText = "Processing (Heavy)..."; btn.disabled = true;
         
         let imgB64 = fImg ? await compressImg(fImg) : null;
         let vidB64 = null;
@@ -1441,10 +1444,32 @@
             return;
         }
 
-        await db.collection("posts").add({ 
-            uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, vid: vidB64,
+        const postData = { 
+            uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64,
             priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() 
-        });
+        };
+
+        if(vidB64) {
+            if(vidB64.length > 900000) { // If > ~900KB, use chunking
+                postData.isChunked = true;
+                const chunkSize = 800000; // 800KB safe margin
+                const totalChunks = Math.ceil(vidB64.length / chunkSize);
+                postData.chunkCount = totalChunks;
+                
+                const masterPost = await db.collection("posts").add(postData);
+                for(let i = 0; i < totalChunks; i++) {
+                    const chunk = vidB64.substring(i * chunkSize, (i + 1) * chunkSize);
+                    await db.collection("post_chunks").doc(masterPost.id).collection("data").add({
+                        part: chunk, idx: i
+                    });
+                }
+            } else {
+                postData.vid = vidB64;
+                await db.collection("posts").add(postData);
+            }
+        } else {
+            await db.collection("posts").add(postData);
+        }
 
         document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = ""; document.getElementById('postVid').value = "";
         btn.innerText = "Post"; btn.disabled = false;
@@ -1481,15 +1506,16 @@
 
     async function toggleFriend() {
         if(!navigator.onLine) return;
-        const isFriend = (curUser.friends || []).includes(viewingId);
-        const isSent = (curUser.friendReqsSent || []).includes(viewingId);
+        const uid = viewingId;
+        const isFriend = (curUser.friends || []).includes(uid);
+        const isSent = (curUser.friendReqsSent || []).includes(uid);
         if(isFriend) { if(confirm("Unfriend?")) {
-            await db.collection("users").doc(curUser.id).update({ friends: firebase.firestore.FieldValue.arrayRemove(viewingId) });
-            await db.collection("users").doc(viewingId).update({ friends: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
+            await db.collection("users").doc(curUser.id).update({ friends: firebase.firestore.FieldValue.arrayRemove(uid) });
+            await db.collection("users").doc(uid).update({ friends: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
         }} else if(isSent) {
-            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(viewingId) });
+            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(uid) });
         } else {
-            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayUnion(viewingId) });
+            await db.collection("users").doc(curUser.id).update({ friendReqsSent: firebase.firestore.FieldValue.arrayUnion(uid) });
         }
     }
 
@@ -1552,7 +1578,14 @@
         document.getElementById('editModal').style.display = 'none';
     }
 
-    async function deletePost(pid) { if(confirm("Delete this post?")) await db.collection("posts").doc(pid).delete(); }
+    async function deletePost(pid) { 
+        if(confirm("Delete this post?")) {
+            await db.collection("posts").doc(pid).delete();
+            // Clean up chunks if any
+            const chunks = await db.collection("post_chunks").doc(pid).collection("data").get();
+            chunks.forEach(async d => await d.ref.delete());
+        }
+    }
     function toggleAuth(s) { document.getElementById('loginUI').style.display = s ? 'none' : 'block'; document.getElementById('regUI').style.display = s ? 'block' : 'none'; }
     function toggleComms(id) { 
         const c = document.getElementById(`cBox-${id}`); 
@@ -1608,7 +1641,7 @@
         document.getElementById('chat-window').className = savedTheme;
 
         if (!navigator.onLine) {
-            document.getElementById('chatBody').innerHTML = `<p style="text-align:center; padding:20px; color:var(--gr);">Messenger requires internet connection.</p>`;
+            document.getElementById('chatBody').innerHTML = `<p style="text-align:center; padding:20px; color:var(--gr);">Connection required.</p>`;
             return;
         }
 
@@ -1626,7 +1659,6 @@
         unsubMsgs = db.collection("chats").doc(chatId).collection("messages").orderBy("ts", "asc").onSnapshot(s => {
             const msgs = s.docs.map(d => ({id: d.id, ...d.data()}));
             const body = document.getElementById('chatBody');
-            
             let headerImg = msgs.length === 0 ? `<div style="text-align:center; padding:20px;"><img src="${msgAssets.banner}" style="width:100%; border-radius:15px; margin-bottom:10px; opacity:0.8;"><p style="font-size:12px; color:var(--gr);">Say hello to ${target.n}!</p></div>` : '';
 
             body.innerHTML = headerImg + msgs.map((m, idx) => {
@@ -1654,16 +1686,8 @@
         });
     }
 
-    /* Tap and Hold Logic */
-    function handleTouchStart(e, id, sender) {
-        longPressTimer = setTimeout(() => {
-            showMsgMenu(e, id, sender);
-        }, 600);
-    }
-
-    function handleTouchEnd() {
-        clearTimeout(longPressTimer);
-    }
+    function handleTouchStart(e, id, sender) { longPressTimer = setTimeout(() => { showMsgMenu(e, id, sender); }, 600); }
+    function handleTouchEnd() { clearTimeout(longPressTimer); }
 
     function showMsgMenu(e, id, sender) {
         if(e) e.preventDefault();
@@ -1671,63 +1695,38 @@
         selectedMsgSender = sender;
         const menu = document.getElementById('msgMenu');
         const unsendOpt = document.getElementById('unsendOpt');
-
         unsendOpt.style.display = (sender === curUser.id) ? 'flex' : 'none';
-
         let x, y;
         if (e && e.touches && e.touches.length > 0) {
-            x = e.touches[0].clientX;
-            y = e.touches[0].clientY;
+            x = e.touches[0].clientX; y = e.touches[0].clientY;
         } else if (e && e.clientX) {
-            x = e.clientX;
-            y = e.clientY;
+            x = e.clientX; y = e.clientY;
         } else {
-            x = window.innerWidth / 2 - 90;
-            y = window.innerHeight / 2 - 100;
+            x = window.innerWidth / 2 - 90; y = window.innerHeight / 2 - 100;
         }
-
         if (x + 190 > window.innerWidth) x = window.innerWidth - 190;
         if (y + 220 > window.innerHeight) y = window.innerHeight - 230;
-        if (x < 10) x = 10;
-        if (y < 10) y = 10;
-
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
+        menu.style.left = x + 'px'; menu.style.top = y + 'px';
         menu.style.display = 'flex';
-
         if (window.navigator.vibrate) window.navigator.vibrate(40);
     }
 
-    function closeMsgMenu() {
-        document.getElementById('msgMenu').style.display = 'none';
-    }
+    function closeMsgMenu() { document.getElementById('msgMenu').style.display = 'none'; }
 
     async function menuAction(type) {
         if (!selectedMsgId || !navigator.onLine) return;
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        
         switch(type) {
             case 'unsend':
-                if(confirm("Unsend message for everyone?")) {
-                    await db.collection("chats").doc(chatId).collection("messages").doc(selectedMsgId).delete();
-                }
+                if(confirm("Unsend message?")) await db.collection("chats").doc(chatId).collection("messages").doc(selectedMsgId).delete();
                 break;
             case 'deleteMe':
-                if(confirm("Delete message for you?")) {
+                if(confirm("Delete for you?")) {
                     const el = document.querySelector(`[onmousedown*="${selectedMsgId}"]`);
                     if(el) el.parentElement.style.display = 'none';
                 }
                 break;
-            case 'reply':
-                document.getElementById('mInp').focus();
-                document.getElementById('mInp').placeholder = "Replying to message...";
-                break;
-            case 'forward':
-                alert("Select a friend to forward this message.");
-                break;
-            case 'pin':
-                alert("Message pinned.");
-                break;
+            case 'reply': document.getElementById('mInp').focus(); break;
         }
         closeMsgMenu();
     }
@@ -1750,13 +1749,11 @@
         const inp = document.getElementById('mInp');
         const txt = inp.value.trim();
         if(!txt || !activeChatId) return;
-        
         const chatId = [curUser.id, activeChatId].sort().join('_');
         await db.collection("chats").doc(chatId).collection("messages").add({
             sender: curUser.id, text: txt, ts: Date.now(), seen: false
         });
         inp.value = "";
-        inp.placeholder = "Type a message...";
     }
 
     async function sendImgMsg() {
@@ -1770,9 +1767,7 @@
         });
     }
 
-    function startChatFromProfile() {
-        openChat(viewingId);
-    }
+    function startChatFromProfile() { openChat(viewingId); }
 </script>
 </body>
 </html>

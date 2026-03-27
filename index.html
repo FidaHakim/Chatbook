@@ -906,71 +906,61 @@
 
     async function compressVideo(file) {
         return new Promise(async (resolve, reject) => {
+            // If the file is small enough, skip compression to avoid browser compatibility issues
+            if (file.size < 2 * 1024 * 1024) {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+                return;
+            }
+
             const video = document.createElement('video');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            if (!window.MediaRecorder) {
-                return reject("Browser does not support video compression.");
+            if (!window.MediaRecorder || !canvas.captureStream) {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+                return;
             }
 
-            const videoSrc = URL.createObjectURL(file);
-            video.src = videoSrc;
-            video.muted = false; // Need audio
-            video.preload = 'auto';
+            video.src = URL.createObjectURL(file);
+            video.muted = true;
+            video.playsInline = true;
 
-            video.onloadedmetadata = async () => {
+            video.onloadedmetadata = () => {
                 const scale = Math.min(1, 480 / video.videoHeight);
                 canvas.width = video.videoWidth * scale;
                 canvas.height = video.videoHeight * scale;
 
-                // Capture stream from canvas
-                const canvasStream = canvas.captureStream();
-                
-                // Get audio track from the original video source
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaElementSource(video);
-                const destination = audioContext.createMediaStreamDestination();
-                source.connect(destination);
-                source.connect(audioContext.destination); // Connect to output so we can hear it while recording
-
-                // Combine canvas video track and audio track
-                const combinedStream = new MediaStream([
-                    ...canvasStream.getVideoTracks(),
-                    ...destination.stream.getAudioTracks()
-                ]);
-
-                const recorder = new MediaRecorder(combinedStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus',
-                    bitsPerSecond: 500000 
-                });
-
+                const stream = canvas.captureStream(30);
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 const chunks = [];
+
                 recorder.ondataavailable = e => chunks.push(e.data);
                 recorder.onstop = () => {
                     const blob = new Blob(chunks, { type: 'video/webm' });
                     const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
                     reader.readAsDataURL(blob);
-                    reader.onloadend = () => {
-                        resolve(reader.result);
-                    };
                 };
 
                 video.play();
                 recorder.start();
 
-                const drawFrame = () => {
+                const processFrame = () => {
                     if (video.paused || video.ended) {
                         recorder.stop();
                         return;
                     }
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    requestAnimationFrame(drawFrame);
+                    requestAnimationFrame(processFrame);
                 };
-                drawFrame();
+                processFrame();
             };
-
-            video.onerror = () => reject("Failed to load video file.");
+            video.onerror = () => reject("Video format not supported for compression.");
         });
     }
 
@@ -1445,8 +1435,17 @@
         try {
             vidB64 = fVid ? await compressVideo(fVid) : null;
         } catch(e) {
-            alert(e);
-            btn.innerText = "Post"; btn.disabled = false;
+            console.error(e);
+            alert("Video processing failed, but we will try uploading directly.");
+            const reader = new FileReader();
+            reader.onload = async () => {
+                await db.collection("posts").add({ 
+                    uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, vid: reader.result,
+                    priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() 
+                });
+                resetPostForm();
+            };
+            reader.readAsDataURL(fVid);
             return;
         }
 
@@ -1455,7 +1454,14 @@
             priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() 
         });
 
-        document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = ""; document.getElementById('postVid').value = "";
+        resetPostForm();
+    }
+
+    function resetPostForm() {
+        const btn = document.getElementById('uploadBtn');
+        document.getElementById('postTxt').value = ""; 
+        document.getElementById('postImg').value = ""; 
+        document.getElementById('postVid').value = "";
         btn.innerText = "Post"; btn.disabled = false;
     }
 

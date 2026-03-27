@@ -906,19 +906,12 @@
 
     async function compressVideo(file) {
         return new Promise(async (resolve, reject) => {
-            // If the file is small enough, skip compression to avoid browser compatibility issues
-            if (file.size < 2 * 1024 * 1024) {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-                return;
-            }
-
+            // For Chatbook Pro: Low quality focus to allow full duration
             const video = document.createElement('video');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
+            // Fallback for browsers without MediaRecorder
             if (!window.MediaRecorder || !canvas.captureStream) {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
@@ -931,14 +924,19 @@
             video.playsInline = true;
 
             video.onloadedmetadata = () => {
-                const scale = Math.min(1, 480 / video.videoHeight);
+                // Resize to low res (360p or lower) for smaller data footprint
+                const targetHeight = 360;
+                const scale = Math.min(1, targetHeight / video.videoHeight);
                 canvas.width = video.videoWidth * scale;
                 canvas.height = video.videoHeight * scale;
 
-                const stream = canvas.captureStream(30);
-                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                const stream = canvas.captureStream(20); // 20fps for better compression
+                const recorder = new MediaRecorder(stream, { 
+                    mimeType: 'video/webm;codecs=vp8',
+                    videoBitsPerSecond: 400000 // Very low bitrate to save space
+                });
+                
                 const chunks = [];
-
                 recorder.ondataavailable = e => chunks.push(e.data);
                 recorder.onstop = () => {
                     const blob = new Blob(chunks, { type: 'video/webm' });
@@ -960,7 +958,7 @@
                 };
                 processFrame();
             };
-            video.onerror = () => reject("Video format not supported for compression.");
+            video.onerror = () => reject("Video error.");
         });
     }
 
@@ -1171,23 +1169,6 @@
         await db.collection("stories").add({ uid: curUser.id, u: curUser.n, av: curUser.av, img: base64, ts: Date.now(), reacts: [], views: [] });
     }
 
-    async function addStoryReaction(emoji) {
-        if(!activeStoryId || !navigator.onLine) return;
-        const story = allStories.find(s => s.id === activeStoryId);
-        let reacts = story.reacts || [];
-        reacts = reacts.filter(r => r.uid !== curUser.id);
-        reacts.push({ uid: curUser.id, u: curUser.n, emoji: emoji });
-        await db.collection("stories").doc(activeStoryId).update({ reacts: reacts });
-        
-        const heart = document.createElement('div');
-        heart.innerHTML = emoji;
-        heart.style.position = 'fixed'; heart.style.left = '50%'; heart.style.top = '50%';
-        heart.style.fontSize = '80px'; heart.style.transform = 'translate(-50%, -50%)';
-        heart.style.animation = 'reactPop 0.6s forwards'; heart.style.zIndex = '12000';
-        document.body.appendChild(heart);
-        setTimeout(() => heart.remove(), 600);
-    }
-
     function toggleSearch() {
         const sb = document.getElementById('sBox');
         sb.style.display = sb.style.display === 'none' ? 'block' : 'none';
@@ -1314,65 +1295,6 @@
         `}).join('');
     }
 
-    function editPost(pid) {
-        const post = allPosts.find(p => p.id === pid);
-        const container = document.getElementById(`pTxtContainer-${pid}`);
-        container.innerHTML = `
-            <textarea id="editArea-${pid}" class="edit-area">${post.text}</textarea>
-            <div class="edit-actions">
-                <button class="mini-btn" style="background:var(--blue); color:white;" onclick="saveEditPost('${pid}')">Save</button>
-                <button class="mini-btn" style="background:#eee;" onclick="renderFeed(allPosts)">Cancel</button>
-            </div>
-        `;
-    }
-
-    async function saveEditPost(pid) {
-        if(!navigator.onLine) return;
-        const newTxt = document.getElementById(`editArea-${pid}`).value;
-        await db.collection("posts").doc(pid).update({ text: newTxt });
-    }
-
-    function editComm(pid, cIdx) {
-        const post = allPosts.find(p => p.id === pid);
-        const comm = post.comments[cIdx];
-        const span = document.getElementById(`cTxt-${pid}-${cIdx}`);
-        const parent = span.parentElement;
-        parent.innerHTML = `
-            <b>${comm.u}</b><br>
-            <textarea id="editCommArea-${pid}-${cIdx}" class="edit-area" style="margin:5px 0;">${comm.text}</textarea>
-            <div class="edit-actions">
-                <button class="mini-btn" style="background:var(--blue); color:white;" onclick="saveEditComm('${pid}', ${cIdx})">Save</button>
-                <button class="mini-btn" style="background:#eee;" onclick="renderFeed(allPosts)">Cancel</button>
-            </div>
-        `;
-    }
-
-    async function saveEditComm(pid, cIdx) {
-        if(!navigator.onLine) return;
-        const newTxt = document.getElementById(`editCommArea-${pid}-${cIdx}`).value;
-        const post = allPosts.find(p => p.id === pid);
-        let comms = [...post.comments];
-        comms[cIdx].text = newTxt;
-        await db.collection("posts").doc(pid).update({ comments: comms });
-    }
-
-    function showReplyBox(pid, idx) {
-        const box = document.getElementById(`rInpBox-${pid}-${idx}`);
-        box.style.display = box.style.display === 'none' ? 'flex' : 'none';
-        if(box.style.display === 'flex') document.getElementById(`ri-${pid}-${idx}`).focus();
-    }
-
-    async function addReply(pid, cIdx) {
-        if(!navigator.onLine) return;
-        const inp = document.getElementById(`ri-${pid}-${cIdx}`); if(!inp.value) return;
-        const post = allPosts.find(p => p.id === pid);
-        let comms = [...post.comments];
-        if(!comms[cIdx].replies) comms[cIdx].replies = [];
-        comms[cIdx].replies.push({ u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() });
-        await db.collection("posts").doc(pid).update({ comments: comms });
-        inp.value = "";
-    }
-
     function renderPeople(data) {
         const others = data.filter(u => u.id !== curUser.id && (u.n || "").toLowerCase().includes(searchQuery));
         document.getElementById('people-list').innerHTML = others.map(u => `
@@ -1431,23 +1353,7 @@
         btn.innerText = "Processing..."; btn.disabled = true;
         
         let imgB64 = fImg ? await compressImg(fImg) : null;
-        let vidB64 = null;
-        try {
-            vidB64 = fVid ? await compressVideo(fVid) : null;
-        } catch(e) {
-            console.error(e);
-            alert("Video processing failed, but we will try uploading directly.");
-            const reader = new FileReader();
-            reader.onload = async () => {
-                await db.collection("posts").add({ 
-                    uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, vid: reader.result,
-                    priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() 
-                });
-                resetPostForm();
-            };
-            reader.readAsDataURL(fVid);
-            return;
-        }
+        let vidB64 = fVid ? await compressVideo(fVid) : null;
 
         await db.collection("posts").add({ 
             uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, vid: vidB64,

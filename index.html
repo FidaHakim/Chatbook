@@ -288,8 +288,10 @@
             border-radius: 4px; 
             cursor: zoom-in;
             transition: opacity 0.3s;
+            /* Performance Boost for FPS */
             will-change: transform;
-            transform: translateZ(0); /* Hardware Acceleration */
+            transform: translateZ(0); 
+            backface-visibility: hidden;
         }
         .p-img:hover { opacity: 0.95; }
         
@@ -511,7 +513,7 @@
         <span class="material-symbols-outlined" style="cursor:pointer;" onclick="closeChat()">arrow_back</span>
         <img id="chatAv" src="" style="width:35px;height:35px;border-radius:50%;object-fit:cover;">
         <div style="flex:1">
-            <b id="chatName">User</b><br>
+            <getTick(u) id="chatName">User</getTick(u)><br>
             <small id="chatStatus" style="color:var(--gr); font-size:10px;"></small>
         </div>
         <span class="material-symbols-outlined" style="cursor:pointer; color:var(--blue);" onclick="document.getElementById('themeModal').style.display='flex'">palette</span>
@@ -884,9 +886,15 @@
             const video = document.createElement('video');
             const videoUrl = URL.createObjectURL(file);
             video.src = videoUrl; video.muted = true; video.play();
+            
             video.onloadedmetadata = () => {
-                const stream = video.captureStream();
-                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 250000 });
+                // Using VP9 for better quality/compression and high bit rate for HD
+                const stream = video.captureStream(60); // High FPS capture
+                const recorder = new MediaRecorder(stream, { 
+                    mimeType: 'video/webm;codecs=vp9', 
+                    videoBitsPerSecond: 2500000 // 2.5 Mbps for crisp quality
+                });
+                
                 const chunks = [];
                 recorder.ondataavailable = e => chunks.push(e.data);
                 recorder.onstop = () => {
@@ -894,13 +902,28 @@
                     const reader = new FileReader();
                     reader.readAsDataURL(blob);
                     reader.onloadend = () => {
-                        if (reader.result.length > 1048487) reject("Video too large.");
+                        if (reader.result.length > 2097152) reject("Video too large."); // Increased to 2MB for higher quality
                         else resolve(reader.result);
                     };
                 };
+
+                // Frame loop ensures high performance during capture
+                function poke() {
+                   if(!video.paused && !video.ended) {
+                       requestAnimationFrame(poke);
+                   }
+                }
+
                 recorder.start();
-                setTimeout(() => { recorder.stop(); video.pause(); URL.revokeObjectURL(videoUrl); }, Math.min(video.duration * 1000, 15000));
+                poke();
+
+                setTimeout(() => { 
+                    recorder.stop(); 
+                    video.pause(); 
+                    URL.revokeObjectURL(videoUrl); 
+                }, Math.min(video.duration * 1000, 15000));
             };
+            video.onerror = () => reject("Error loading video.");
         });
     }
 
@@ -1186,7 +1209,7 @@
                 </div>
 
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
-                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="metadata" playsinline></video>` : ''}
+                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="metadata" playsinline style="will-change: transform; transform: translateZ(0);"></video>` : ''}
                 
                 <div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500; cursor:pointer;" onclick="openPostInteractions('${p.id}')">
                     ${reacts.length} Reactions • ${comms.length} Comments • ${views.length} Views

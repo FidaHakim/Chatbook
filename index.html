@@ -895,59 +895,21 @@
         });
     }
 
+    /* Updated Video Compression with SOUND preservation */
     async function compressVideo(file) {
         return new Promise((resolve, reject) => {
-            const video = document.createElement('video');
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            if (!window.MediaRecorder) return reject("Browser not supported.");
-
-            video.src = URL.createObjectURL(file);
-            video.muted = true;
-            video.preload = 'auto';
-
-            video.onloadedmetadata = () => {
-                const scale = Math.min(1, 480 / video.videoHeight);
-                canvas.width = video.videoWidth * scale;
-                canvas.height = video.videoHeight * scale;
-
-                const stream = canvas.captureStream();
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm;codecs=vp8',
-                    bitsPerSecond: 800000 // Optimized for chunking
-                });
-
-                const chunks = [];
-                recorder.ondataavailable = e => chunks.push(e.data);
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(blob);
-                    reader.onloadend = () => {
-                        const base64 = reader.result;
-                        // Support for 10MB limit via chunking logic below
-                        if (base64.length > 13000000) { 
-                            reject("Video exceeds 10MB limit.");
-                        } else {
-                            resolve(base64);
-                        }
-                    };
-                };
-
-                video.play();
-                recorder.start();
-
-                const drawFrame = () => {
-                    if (video.paused || video.ended) {
-                        recorder.stop();
-                        return;
-                    }
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    requestAnimationFrame(drawFrame);
-                };
-                drawFrame();
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const base64 = e.target.result;
+                // Direct Base64 capture preserves the full data stream including audio
+                if (base64.length > 13500000) { // Slightly over 10MB to account for base64 overhead
+                    reject("Video exceeds 10MB limit.");
+                } else {
+                    resolve(base64);
+                }
             };
+            reader.onerror = () => reject("Error reading video file.");
         });
     }
 
@@ -1242,7 +1204,7 @@
                 </div>
 
                 ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
-                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="auto" playsinline style="will-change: transform; transform: translateZ(0);"></video>` : ''}
+                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="metadata" playsinline></video>` : ''}
                 
                 <div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500; cursor:pointer;" onclick="openPostInteractions('${p.id}')">
                     ${reacts.length} Reactions • ${comms.length} Comments • ${views.length} Views
@@ -1424,7 +1386,7 @@
         if(!t && !fImg && !fVid) return;
         
         const btn = document.getElementById('uploadBtn');
-        btn.innerText = "Processing (Heavy)..."; btn.disabled = true;
+        btn.innerText = "Processing (Audio Ready)..."; btn.disabled = true;
         
         let imgB64 = fImg ? await compressImg(fImg) : null;
         let vidB64 = null;
@@ -1438,9 +1400,8 @@
         };
 
         if(vidB64) {
-            // Master-Chunking for 10MB Support
             postData.isChunked = true;
-            const chunkSize = 600000; // Safe chunk under 1MB limit
+            const chunkSize = 600000; 
             const totalChunks = Math.ceil(vidB64.length / chunkSize);
             postData.chunkCount = totalChunks;
             
@@ -1521,7 +1482,7 @@
                 <div class="card">
                     <p style="font-size: 15px; line-height: 1.5;">${cleanXSS(p.text)}</p>
                     ${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}
-                    ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="auto" playsinline style="will-change: transform; transform: translateZ(0);"></video>` : ''}
+                    ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="metadata" playsinline></video>` : ''}
                     <div style="font-size:11px; color:#999; margin-top:8px; font-weight: 500;">${fmtTime(p.ts)} • ${p.priv}</div>
                 </div>`).join('');
         }

@@ -906,19 +906,63 @@
 
     async function compressVideo(file) {
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => {
-                let result = reader.result;
-                // Hard check for Firestore Document limit (approx 1MB)
-                // If it's over 999KB, we simply cannot store it in a single field.
-                if (result.length > 999 * 1024) { 
-                    reject("Video is too large (Firestore limit: 999KB). Please upload a shorter/smaller clip.");
-                } else {
-                    resolve(result);
-                }
+            const video = document.createElement('video');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream();
+            
+            // Check for MediaRecorder support
+            if (!window.MediaRecorder) {
+                return reject("Browser does not support video compression.");
+            }
+
+            video.src = URL.createObjectURL(file);
+            video.muted = true;
+            video.preload = 'auto';
+
+            video.onloadedmetadata = () => {
+                // Downscale resolution for aggressive compression (max 480p)
+                const scale = Math.min(1, 480 / video.videoHeight);
+                canvas.width = video.videoWidth * scale;
+                canvas.height = video.videoHeight * scale;
+
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp8',
+                    bitsPerSecond: 250000 // Very low bitrate to stay under 1MB
+                });
+
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = () => {
+                        const base64 = reader.result;
+                        if (base64.length > 1048487) {
+                            reject("Video too long. Even compressed, it exceeds 1MB limit.");
+                        } else {
+                            resolve(base64);
+                        }
+                    };
+                };
+
+                // Play and Record
+                video.play();
+                recorder.start();
+
+                const drawFrame = () => {
+                    if (video.paused || video.ended) {
+                        recorder.stop();
+                        return;
+                    }
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    requestAnimationFrame(drawFrame);
+                };
+                drawFrame();
             };
-            reader.onerror = () => reject("Error reading video file.");
+
+            video.onerror = () => reject("Failed to load video file.");
         });
     }
 

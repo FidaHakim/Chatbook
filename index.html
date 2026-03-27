@@ -909,9 +909,7 @@
             const video = document.createElement('video');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const stream = canvas.captureStream();
             
-            // Check for MediaRecorder support
             if (!window.MediaRecorder) {
                 return reject("Browser does not support video compression.");
             }
@@ -921,14 +919,15 @@
             video.preload = 'auto';
 
             video.onloadedmetadata = () => {
-                // Downscale resolution for aggressive compression (max 480p)
+                // High compression: Force max height to 480p
                 const scale = Math.min(1, 480 / video.videoHeight);
                 canvas.width = video.videoWidth * scale;
                 canvas.height = video.videoHeight * scale;
 
+                const stream = canvas.captureStream();
                 const recorder = new MediaRecorder(stream, {
                     mimeType: 'video/webm;codecs=vp8',
-                    bitsPerSecond: 250000 // Very low bitrate to stay under 1MB
+                    bitsPerSecond: 250000 // 250kbps for small file size
                 });
 
                 const chunks = [];
@@ -939,15 +938,15 @@
                     reader.readAsDataURL(blob);
                     reader.onloadend = () => {
                         const base64 = reader.result;
-                        if (base64.length > 1048487) {
-                            reject("Video too long. Even compressed, it exceeds 1MB limit.");
+                        // Limit to ~1MB
+                        if (base64.length > 1300000) { 
+                            reject("Video is too long to stay under 1MB even with compression.");
                         } else {
                             resolve(base64);
                         }
                     };
                 };
 
-                // Play and Record
                 video.play();
                 recorder.start();
 

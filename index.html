@@ -909,10 +909,13 @@
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = () => {
-                if (reader.result.length > 1 * 1024 * 1024) { 
-                    reject("Video is too heavy for Firestore (Max 1MB allowed).");
+                let result = reader.result;
+                // Hard check for Firestore Document limit (approx 1MB)
+                // If it's over 999KB, we simply cannot store it in a single field.
+                if (result.length > 999 * 1024) { 
+                    reject("Video is too large (Firestore limit: 999KB). Please upload a shorter/smaller clip.");
                 } else {
-                    resolve(reader.result);
+                    resolve(result);
                 }
             };
             reader.onerror = () => reject("Error reading video file.");
@@ -1185,7 +1188,7 @@
                         <div style="position:absolute; bottom:0; right:0;">${getStatusDot(author)}</div>
                     </div>
                     <div style="flex:1">
-                        <b onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="cursor:pointer; font-size: 15px;">${author.n}${getTick(author)}</b>
+                        <getTick(u) onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="cursor:pointer; font-size: 15px;">${author.n}${getTick(author)}</getTick(u)>
                         <div style="font-size:11px; color:var(--gr); font-weight: 500;">${fmtTime(p.ts)} • ${p.priv === 'public' ? '🌍' : (p.priv === 'friends' ? '👥' : '🔒')}</div>
                     </div>
                     ${p.uid === curUser.id ? `

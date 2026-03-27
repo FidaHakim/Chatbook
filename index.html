@@ -888,11 +888,10 @@
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = () => {
-                // Return original base64 if it's within a reasonable limit (2MB)
-                // Base64 encoding for video in this simple environment is best handled via original strings 
-                // to prevent data loss unless using a heavy worker.
-                if (reader.result.length > 3145728) { // 3MB Limit
-                    reject("Video too large. Please select a shorter clip.");
+                // If it's a large video, we handle it as a single high-quality Base64 
+                // In production, you'd use a cloud bucket, but for this standalone HTML:
+                if (reader.result.length > 10 * 1024 * 1024) { // 10MB limit check
+                    reject("Video is too heavy for Firestore (Max 10MB).");
                 } else {
                     resolve(reader.result);
                 }

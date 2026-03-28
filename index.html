@@ -726,11 +726,6 @@
 </div>
 
 <script>
-    /** * SECURITY HARDENING LAYER
-     * 1. Protect Firebase Configuration from Console manipulation
-     * 2. Basic XSS protection for text rendering
-     * 3. Redirect to HTTPS if accessed over HTTP
-     */
     if (window.location.protocol === "http:" && window.location.hostname !== "localhost") {
         window.location.href = window.location.href.replace("http:", "https:");
     }
@@ -757,20 +752,17 @@
     let selectedMsgId = null;
     let selectedMsgSender = null;
 
-    // Static Assets for Messenger
     const msgAssets = {
         banner: "input_file_0.png",
         profile: "input_file_1.png"
     };
 
-    // Loading screen handler
     function hideLoader() {
         const loader = document.getElementById('loadingLayer');
         loader.style.opacity = '0';
         setTimeout(() => loader.style.display = 'none', 800);
     }
 
-    // Offline & Connectivity Listeners
     function checkConnectivity() {
         if (!navigator.onLine) {
             handleOfflineMode();
@@ -831,7 +823,6 @@
         document.getElementById('mainApp').style.display='block';
         document.getElementById('postBoxAv').src = curUser.av;
         
-        // Sync setting states
         if(localStorage.getItem('chatbook_dark') === 'true') {
             document.body.classList.add('dark-mode');
             document.getElementById('darkModeToggle').checked = true;
@@ -843,7 +834,7 @@
             setInterval(updatePresence, 60000); 
             sync();
         }
-        hideLoader(); // Hide loader after data sync starts
+        hideLoader();
     }
 
     async function updatePresence() {
@@ -895,8 +886,6 @@
                     canvas.width = img.width * scale;
                     canvas.height = img.height * scale;
                     const ctx = canvas.getContext('2d');
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     res(canvas.toDataURL('image/jpeg', quality));
                 };
@@ -904,59 +893,44 @@
         });
     }
 
-    async function compressVideo(file) {
+    // NEW VIDEO CHUNKING LOGIC FOR 50 DOCS (Approx 50MB)
+    async function compressAndUploadVideo(file, postId) {
         return new Promise((resolve, reject) => {
-            const video = document.createElement('video');
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            video.src = URL.createObjectURL(file);
-            video.muted = true;
-            video.play();
-            
-            video.onloadeddata = async () => {
-                // Extreme compression: 144p resolution
-                canvas.width = 176;
-                canvas.height = 144;
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async (e) => {
+                const base64 = e.target.result;
+                const chunkSize = 1000000; // ~1MB per doc
+                const totalChunks = Math.ceil(base64.length / chunkSize);
                 
-                const stream = canvas.captureStream(10); // 10 FPS
-                const recorder = new MediaRecorder(stream, { 
-                    mimeType: 'video/webm;codecs=vp8',
-                    videoBitsPerSecond: 50000 // Extremely low bitrate
-                });
-                
-                const chunks = [];
-                recorder.ondataavailable = e => chunks.push(e.data);
-                recorder.onstop = async () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(blob);
-                    reader.onloadend = () => {
-                        const base64 = reader.result;
-                        // Split into 12 parts for Firestore safety if large
-                        if (base64.length > 1024 * 1024 * 12) {
-                            reject("Video too long even after extreme compression.");
-                        } else {
-                            resolve(base64);
-                        }
-                    };
-                };
+                if (totalChunks > 50) {
+                    reject("Video too large (max 50MB)");
+                    return;
+                }
 
-                recorder.start();
-                const drawFrame = () => {
-                    if (video.paused || video.ended) {
-                        recorder.stop();
-                        return;
-                    }
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    requestAnimationFrame(drawFrame);
-                };
-                drawFrame();
-
-                // Limit video capture to 10 seconds for ultra small size
-                setTimeout(() => { if(recorder.state === "recording") recorder.stop(); }, 10000);
+                for (let i = 0; i < totalChunks; i++) {
+                    const segment = base64.substring(i * chunkSize, (i + 1) * chunkSize);
+                    await db.collection("posts").doc(postId).collection("videoChunks").doc("chunk_"+i).set({
+                        data: segment,
+                        index: i
+                    });
+                }
+                resolve(true);
             };
-            video.onerror = () => reject("Compression Error");
+            reader.onerror = () => reject("Read error");
         });
+    }
+
+    async function fetchFullVideo(postId, videoElementId) {
+        const snapshot = await db.collection("posts").doc(postId).collection("videoChunks").orderBy("index").get();
+        if (snapshot.empty) return;
+        let fullData = "";
+        snapshot.forEach(doc => fullData += doc.data().data);
+        const vid = document.getElementById(videoElementId);
+        if (vid) {
+            vid.src = fullData;
+            vid.style.display = "block";
+        }
     }
 
     async function viewImage(src, storyId = null) {
@@ -973,8 +947,6 @@
             const story = allStories.find(s => s.id === storyId);
             rBar.style.display = 'flex';
             insBtn.style.display = (story && story.uid === curUser.id) ? 'block' : 'none';
-            
-            // Log view
             if(story && story.uid !== curUser.id && navigator.onLine) {
                 let views = story.views || [];
                 if(!views.includes(curUser.id)) {
@@ -986,7 +958,6 @@
             rBar.style.display = 'none';
             insBtn.style.display = 'none';
         }
-
         lb.style.display = 'flex';
     }
 
@@ -994,8 +965,6 @@
         const lb = document.getElementById('lightbox');
         lb.style.display = 'none';
         activeStoryId = null;
-        document.getElementById('storyReactBar').style.display = 'none';
-        document.getElementById('viewInsightsBtn').style.display = 'none';
     }
 
     function openStoryInsights() {
@@ -1004,23 +973,11 @@
         const list = document.getElementById('insightList');
         const viewIds = story.views || [];
         const reacts = story.reacts || [];
-
-        let html = '';
-        if(viewIds.length === 0) {
-            html = '<p style="text-align:center; color:var(--gr);">No views yet.</p>';
-        } else {
-            html = viewIds.map(vid => {
-                const user = allUsers.find(u => u.id === vid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
-                const reaction = reacts.find(r => r.uid === vid);
-                return `
-                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; padding: 10px; background:#f9f9f9; border-radius:10px;">
-                        <img src="${user.av}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
-                        <div style="flex:1;"><b>${user.n}</b></div>
-                        <div style="font-size:22px;">${reaction ? reaction.emoji : ''}</div>
-                    </div>
-                `;
-            }).join('');
-        }
+        let html = viewIds.map(vid => {
+            const user = allUsers.find(u => u.id === vid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
+            const reaction = reacts.find(r => r.uid === vid);
+            return `<div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; padding: 10px; background:#f9f9f9; border-radius:10px;"><img src="${user.av}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;"><div style="flex:1;"><b>${user.n}</b></div><div style="font-size:22px;">${reaction ? reaction.emoji : ''}</div></div>`;
+        }).join('') || '<p style="text-align:center; color:var(--gr);">No views yet.</p>';
         list.innerHTML = html;
         document.getElementById('insightModal').style.display = 'flex';
     }
@@ -1031,32 +988,13 @@
         const list = document.getElementById('insightList');
         const reacts = post.reacts || [];
         const views = post.views || [];
-
-        let html = `<h4>Reactions (${reacts.length})</h4>`;
-        if(reacts.length === 0) html += '<p style="font-size:12px; color:var(--gr);">No reactions yet.</p>';
-        else {
-            html += reacts.map(r => {
-                const user = allUsers.find(u => u.id === r.uid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
-                return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-                    <img src="${user.av}" style="width:30px; height:30px; border-radius:50%;">
-                    <div style="flex:1;"><b>${user.n}</b></div>
-                    <div style="font-size:18px;">${r.emoji}</div>
-                </div>`;
-            }).join('');
-        }
-
-        html += `<h4 style="margin-top:20px;">Viewers (${views.length})</h4>`;
-        if(views.length === 0) html += '<p style="font-size:12px; color:var(--gr);">No views tracked.</p>';
-        else {
-            html += views.map(vid => {
-                const user = allUsers.find(u => u.id === vid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
-                return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-                    <img src="${user.av}" style="width:30px; height:30px; border-radius:50%;">
-                    <div><b>${user.n}</b></div>
-                </div>`;
-            }).join('');
-        }
-
+        let html = `<h4>Reactions (${reacts.length})</h4>` + reacts.map(r => {
+            const user = allUsers.find(u => u.id === r.uid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
+            return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><img src="${user.av}" style="width:30px; height:30px; border-radius:50%;"><b>${user.n}</b> ${r.emoji}</div>`;
+        }).join('') + `<h4 style="margin-top:20px;">Viewers (${views.length})</h4>` + views.map(vid => {
+            const user = allUsers.find(u => u.id === vid) || { n: "Deleted User", av: "https://i.pravatar.cc/150" };
+            return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><img src="${user.av}" style="width:30px; height:30px; border-radius:50%;"><b>${user.n}</b></div>`;
+        }).join('');
         list.innerHTML = html;
         document.getElementById('insightModal').style.display = 'flex';
     }
@@ -1138,23 +1076,10 @@
     function renderStories() {
         const storiesList = document.getElementById('stories-data');
         if(!curUser) return;
-        let html = `
-            <div class="story-card" style="background:white;" onclick="document.getElementById('storyInp').click()">
-                <img src="${curUser.av}" class="story-img" style="height:70%; border-bottom:1px solid #eee; width:100%; object-fit:cover;">
-                <div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--blue); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 3px solid white;"><span class="material-symbols-outlined" style="font-size:18px;">add</span></div>
-                <div style="position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: bold;">Create</div>
-                <input type="file" id="storyInp" hidden accept="image/*" onchange="uploadStory(this)">
-            </div>
-        `;
+        let html = `<div class="story-card" style="background:white;" onclick="document.getElementById('storyInp').click()"><img src="${curUser.av}" class="story-img" style="height:70%; border-bottom:1px solid #eee; width:100%; object-fit:cover;"><div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--blue); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 3px solid white;"><span class="material-symbols-outlined" style="font-size:18px;">add</span></div><div style="position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: bold;">Create</div><input type="file" id="storyInp" hidden accept="image/*" onchange="uploadStory(this)"></div>`;
         html += allStories.map(s => {
             const owner = allUsers.find(u => u.id === s.uid) || { n: s.u, av: s.av };
-            return `
-                <div class="story-card" onclick="viewImage('${s.img}', '${s.id}')">
-                    <img src="${owner.av}" style="position: absolute; top: 8px; left: 8px; width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--blue); object-fit: cover; z-index: 2; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
-                    <img src="${s.img}" class="story-img" style="width:100%; height:100%; object-fit:cover;">
-                    <div style="position: absolute; bottom: 8px; left: 8px; color: white; font-size: 11px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.8);">${owner.n}</div>
-                </div>
-            `;
+            return `<div class="story-card" onclick="viewImage('${s.img}', '${s.id}')"><img src="${owner.av}" style="position: absolute; top: 8px; left: 8px; width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--blue); object-fit: cover; z-index: 2;"><img src="${s.img}" class="story-img" style="width:100%; height:100%; object-fit:cover;"><div style="position: absolute; bottom: 8px; left: 8px; color: white; font-size: 11px; font-weight: 600;">${owner.n}</div></div>`;
         }).join('');
         storiesList.innerHTML = html;
     }
@@ -1173,14 +1098,6 @@
         reacts = reacts.filter(r => r.uid !== curUser.id);
         reacts.push({ uid: curUser.id, u: curUser.n, emoji: emoji });
         await db.collection("stories").doc(activeStoryId).update({ reacts: reacts });
-        
-        const heart = document.createElement('div');
-        heart.innerHTML = emoji;
-        heart.style.position = 'fixed'; heart.style.left = '50%'; heart.style.top = '50%';
-        heart.style.fontSize = '80px'; heart.style.transform = 'translate(-50%, -50%)';
-        heart.style.animation = 'reactPop 0.6s forwards'; heart.style.zIndex = '12000';
-        document.body.appendChild(heart);
-        setTimeout(() => heart.remove(), 600);
     }
 
     function toggleSearch() {
@@ -1202,8 +1119,7 @@
             const isOwner = p.uid === curUser.id;
             const isPublic = p.priv === 'public';
             const isFriendsOnly = p.priv === 'friends' && myFriends.includes(p.uid);
-            const matchesSearch = (p.text || "").toLowerCase().includes(searchQuery) || (p.u || "").toLowerCase().includes(searchQuery);
-            return (isOwner || isPublic || isFriendsOnly) && matchesSearch;
+            return (isOwner || isPublic || isFriendsOnly) && ((p.text || "").toLowerCase().includes(searchQuery) || (p.u || "").toLowerCase().includes(searchQuery));
         });
 
         document.getElementById('feed-data').innerHTML = feed.map(p => {
@@ -1217,168 +1133,31 @@
                 db.collection("posts").doc(p.id).update({ views: firebase.firestore.FieldValue.arrayUnion(curUser.id) });
             }
 
-            return `
-            <div class="card" id="post-${p.id}">
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <div style="position:relative">
-                        <img src="${author.av}" style="width:42px; height:42px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))">
-                        <div style="position:absolute; bottom:0; right:0;">${getStatusDot(author)}</div>
-                    </div>
-                    <div style="flex:1">
-                        <b onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="cursor:pointer; font-size: 15px;">${author.n}${getTick(author)}</b>
-                        <div style="font-size:11px; color:var(--gr); font-weight: 500;">${fmtTime(p.ts)} • ${p.priv === 'public' ? '🌍' : (p.priv === 'friends' ? '👥' : '🔒')}</div>
-                    </div>
-                    ${p.uid === curUser.id ? `
-                        <div style="display:flex; gap:10px;">
-                            <span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer; font-size: 20px;" onclick="editPost('${p.id}')">edit</span>
-                            <span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer; font-size: 20px;" onclick="deletePost('${p.id}')">delete</span>
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <div id="pTxtContainer-${p.id}">
-                    <p style="margin:15px 0; line-height: 1.5; font-size: 15px;">${cleanXSS(p.text)}</p>
-                </div>
+            // TRIGGER VIDEO FETCH IF CHUNKED VIDEO EXISTS
+            if(p.hasVideo) { setTimeout(() => fetchFullVideo(p.id, "v-"+p.id), 100); }
 
-                ${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}
-                ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="auto" playsinline style="will-change: transform; transform: translateZ(0);"></video>` : ''}
-                
-                <div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500; cursor:pointer;" onclick="openPostInteractions('${p.id}')">
-                    ${reacts.length} Reactions • ${comms.length} Comments • ${views.length} Views
-                </div>
-
-                <div style="display: flex; position: relative;">
-                    <div class="act-btn" style="flex:1; text-align:center; padding:12px; cursor:pointer; color:${myReact ? 'var(--blue)' : 'var(--gr)'}; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
-                        <div class="react-bar">
-                            <span class="re-btn" onclick="addReaction('${p.id}', '👍')">👍</span>
-                            <span class="re-btn" onclick="addReaction('${p.id}', '❤️')">❤️</span>
-                            <span class="re-btn" onclick="addReaction('${p.id}', '😂')">😂</span>
-                            <span class="re-btn" onclick="addReaction('${p.id}', '😮')">😮</span>
-                            <span class="re-btn" onclick="addReaction('${p.id}', '😢')">😢</span>
-                            <span class="re-btn" onclick="addReaction('${p.id}', '😡')">😡</span>
-                        </div>
-                        <span class="material-symbols-outlined" style="font-variation-settings:'FILL' ${myReact?1:0}">${myReact ? 'favorite' : 'thumb_up'}</span> ${myReact ? myReact.emoji : 'Like'}
-                    </div>
-                    <div onclick="toggleComms('${p.id}')" style="flex:1; text-align:center; padding:12px; cursor:pointer; color:var(--gr); font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
-                        <span class="material-symbols-outlined">chat_bubble</span> Comment
-                    </div>
-                </div>
-                <div id="cBox-${p.id}" style="display:none; padding-top:10px; border-top: 1px solid #f0f2f5; margin-top: 5px;">
-                    <div id="cList-${p.id}">${renderComments(p.id, comms)}</div>
-                    <div style="display:flex; gap:8px; margin-top: 10px;">
-                        <input id="ci-${p.id}" placeholder="Write a comment..." style="padding:10px; font-size:13px; flex:1; border-radius: 20px;">
-                        <button class="btn" style="width:auto; padding:0 18px; border-radius: 20px;" onclick="addComm('${p.id}')">Send</button>
-                    </div>
-                </div>
-            </div>`;
+            return `<div class="card" id="post-${p.id}"><div style="display:flex; gap:10px; align-items:center;"><div style="position:relative"><img src="${author.av}" style="width:42px; height:42px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))"><div style="position:absolute; bottom:0; right:0;">${getStatusDot(author)}</div></div><div style="flex:1"><b onclick="openProfile('${p.uid}', document.getElementById('tab-profile'))" style="cursor:pointer; font-size: 15px;">${author.n}${getTick(author)}</b><div style="font-size:11px; color:var(--gr); font-weight: 500;">${fmtTime(p.ts)} • ${p.priv}</div></div>${p.uid === curUser.id ? `<div style="display:flex; gap:10px;"><span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer; font-size: 20px;" onclick="editPost('${p.id}')">edit</span><span class="material-symbols-outlined" style="color:var(--gr); cursor:pointer; font-size: 20px;" onclick="deletePost('${p.id}')">delete</span></div>` : ''}</div><div id="pTxtContainer-${p.id}"><p style="margin:15px 0; line-height: 1.5; font-size: 15px;">${cleanXSS(p.text)}</p></div>${p.img ? `<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">` : ''}${p.hasVideo ? `<video id="v-${p.id}" class="p-vid" controls style="display:none;"></video>` : ''}<div style="font-size:12px; color:var(--gr); padding:12px 0 8px 0; border-bottom:1px solid #f0f2f5; font-weight: 500; cursor:pointer;" onclick="openPostInteractions('${p.id}')">${reacts.length} Reactions • ${comms.length} Comments</div><div style="display: flex; position: relative;"><div class="act-btn" style="flex:1; text-align:center; padding:12px; cursor:pointer; color:${myReact ? 'var(--blue)' : 'var(--gr)'}; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;"><div class="react-bar"><span class="re-btn" onclick="addReaction('${p.id}', '👍')">👍</span><span class="re-btn" onclick="addReaction('${p.id}', '❤️')">❤️</span><span class="re-btn" onclick="addReaction('${p.id}', '😂')">😂</span><span class="re-btn" onclick="addReaction('${p.id}', '😮')">😮</span><span class="re-btn" onclick="addReaction('${p.id}', '😢')">😢</span><span class="re-btn" onclick="addReaction('${p.id}', '😡')">😡</span></div><span class="material-symbols-outlined" style="font-variation-settings:'FILL' ${myReact?1:0}">${myReact ? 'favorite' : 'thumb_up'}</span> ${myReact ? myReact.emoji : 'Like'}</div><div onclick="toggleComms('${p.id}')" style="flex:1; text-align:center; padding:12px; cursor:pointer; color:var(--gr); font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;"><span class="material-symbols-outlined">chat_bubble</span> Comment</div></div><div id="cBox-${p.id}" style="display:none; padding-top:10px; border-top: 1px solid #f0f2f5; margin-top: 5px;"><div id="cList-${p.id}">${renderComments(p.id, comms)}</div><div style="display:flex; gap:8px; margin-top: 10px;"><input id="ci-${p.id}" placeholder="Write a comment..." style="padding:10px; font-size:13px; flex:1; border-radius: 20px;"><button class="btn" style="width:auto; padding:0 18px; border-radius: 20px;" onclick="addComm('${p.id}')">Send</button></div></div></div>`;
         }).join('');
     }
 
     function renderComments(pid, comms) {
-        return comms.map((c, idx) => {
-            const isMyComm = c.u === curUser.n; 
-            return `
-            <div style="margin-bottom:12px;" id="comm-${pid}-${idx}">
-                <div style="display:flex; gap:10px;">
-                    <img src="${c.av}" style="width:30px;height:30px;border-radius:50%; object-fit: cover;">
-                    <div style="flex:1">
-                        <div style="background:#f0f2f5; padding:10px 14px; border-radius:18px; font-size:14px; display: inline-block; max-width: 100%;">
-                            <b>${c.u}</b><br>
-                            <span id="cTxt-${pid}-${idx}">${cleanXSS(c.text)}</span>
-                        </div>
-                        <div style="font-size:12px; color:var(--gr); margin-left:12px; margin-top:4px; font-weight: 600;">
-                            <span style="cursor:pointer;" onclick="showReplyBox('${pid}', ${idx})">Reply</span> 
-                            ${isMyComm ? ` • <span style="cursor:pointer;" onclick="editComm('${pid}', ${idx})">Edit</span>` : ''}
-                            • ${fmtTime(c.ts)}
-                        </div>
-                    </div>
-                </div>
-                <div id="replies-${pid}-${idx}">
-                    ${(c.replies || []).map(r => `
-                        <div class="reply-box" style="display:flex; gap:8px; margin-top:8px;">
-                            <img src="${r.av}" style="width:24px;height:24px;border-radius:50%; object-fit: cover;">
-                            <div style="background:#f0f2f5; padding:8px 12px; border-radius:15px; font-size:13px; display: inline-block;"><b>${r.u}</b> ${cleanXSS(r.text)}</div>
-                        </div>
-                    `).join('')}
-                </div>
-                <div id="rInpBox-${pid}-${idx}" style="display:none; margin-left:35px; margin-top:8px; gap:8px;">
-                    <input id="ri-${pid}-${idx}" placeholder="Write a reply..." style="padding:8px 12px; font-size:12px; flex:1; border-radius: 15px;">
-                    <button class="btn" style="width:auto; padding:0 12px; height:32px; font-size:12px; border-radius: 15px;" onclick="addReply('${pid}', ${idx})">Reply</button>
-                </div>
-            </div>
-        `}).join('');
+        return comms.map((c, idx) => `<div style="margin-bottom:12px;"><div style="display:flex; gap:10px;"><img src="${c.av}" style="width:30px;height:30px;border-radius:50%; object-fit: cover;"><div style="flex:1"><div style="background:#f0f2f5; padding:10px 14px; border-radius:18px; font-size:14px; display: inline-block;"><b>${c.u}</b><br><span id="cTxt-${pid}-${idx}">${cleanXSS(c.text)}</span></div><div style="font-size:12px; color:var(--gr); margin-left:12px; margin-top:4px;">${fmtTime(c.ts)}</div></div></div></div>`).join('');
     }
 
     function editPost(pid) {
         const post = allPosts.find(p => p.id === pid);
         const container = document.getElementById(`pTxtContainer-${pid}`);
-        container.innerHTML = `
-            <textarea id="editArea-${pid}" class="edit-area">${post.text}</textarea>
-            <div class="edit-actions">
-                <button class="mini-btn" style="background:var(--blue); color:white;" onclick="saveEditPost('${pid}')">Save</button>
-                <button class="mini-btn" style="background:#eee;" onclick="renderFeed(allPosts)">Cancel</button>
-            </div>
-        `;
+        container.innerHTML = `<textarea id="editArea-${pid}" class="edit-area">${post.text}</textarea><div class="edit-actions"><button class="mini-btn" style="background:var(--blue); color:white;" onclick="saveEditPost('${pid}')">Save</button><button class="mini-btn" style="background:#eee;" onclick="renderFeed(allPosts)">Cancel</button></div>`;
     }
 
     async function saveEditPost(pid) {
-        if(!navigator.onLine) return;
         const newTxt = document.getElementById(`editArea-${pid}`).value;
         await db.collection("posts").doc(pid).update({ text: newTxt });
     }
 
-    function editComm(pid, cIdx) {
-        const post = allPosts.find(p => p.id === pid);
-        const comm = post.comments[cIdx];
-        const span = document.getElementById(`cTxt-${pid}-${cIdx}`);
-        const parent = span.parentElement;
-        parent.innerHTML = `
-            <b>${comm.u}</b><br>
-            <textarea id="editCommArea-${pid}-${cIdx}" class="edit-area" style="margin:5px 0;">${comm.text}</textarea>
-            <div class="edit-actions">
-                <button class="mini-btn" style="background:var(--blue); color:white;" onclick="saveEditComm('${pid}', ${cIdx})">Save</button>
-                <button class="mini-btn" style="background:#eee;" onclick="renderFeed(allPosts)">Cancel</button>
-            </div>
-        `;
-    }
-
-    async function saveEditComm(pid, cIdx) {
-        if(!navigator.onLine) return;
-        const newTxt = document.getElementById(`editCommArea-${pid}-${cIdx}`).value;
-        const post = allPosts.find(p => p.id === pid);
-        let comms = [...post.comments];
-        comms[cIdx].text = newTxt;
-        await db.collection("posts").doc(pid).update({ comments: comms });
-    }
-
-    function showReplyBox(pid, idx) {
-        const box = document.getElementById(`rInpBox-${pid}-${idx}`);
-        box.style.display = box.style.display === 'none' ? 'flex' : 'none';
-        if(box.style.display === 'flex') document.getElementById(`ri-${pid}-${idx}`).focus();
-    }
-
-    async function addReply(pid, cIdx) {
-        if(!navigator.onLine) return;
-        const inp = document.getElementById(`ri-${pid}-${cIdx}`); if(!inp.value) return;
-        const post = allPosts.find(p => p.id === pid);
-        let comms = [...post.comments];
-        if(!comms[cIdx].replies) comms[cIdx].replies = [];
-        comms[cIdx].replies.push({ u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() });
-        await db.collection("posts").doc(pid).update({ comments: comms });
-        inp.value = "";
-    }
-
     function renderPeople(data) {
         const others = data.filter(u => u.id !== curUser.id && (u.n || "").toLowerCase().includes(searchQuery));
-        document.getElementById('people-list').innerHTML = others.map(u => `
-            <div class="card" style="display:flex; align-items:center; gap:15px; padding: 15px;">
-                <img src="${u.av}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">
-                <div style="flex:1;">
-                    <b style="cursor:pointer; font-size: 16px;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">${u.n}${getTick(u)}</b>
-                    <div style="font-size:13px; color:var(--gr); margin-top: 3px; font-weight: 500;">${u.work || u.edu || 'Active Member'} ${u.locked ? '🔒' : ''}</div>
-                </div>
-                <button class="btn" style="width:auto; padding: 8px 15px; font-size: 12px;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">View</button>
-            </div>`).join('');
+        document.getElementById('people-list').innerHTML = others.map(u => `<div class="card" style="display:flex; align-items:center; gap:15px; padding: 15px;"><img src="${u.av}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))"><div style="flex:1;"><b>${u.n}${getTick(u)}</b><div style="font-size:13px; color:var(--gr); margin-top: 3px;">${u.work || u.edu || 'Active Member'}</div></div><button class="btn" style="width:auto; padding: 8px 15px; font-size: 12px;" onclick="openProfile('${u.id}', document.getElementById('tab-profile'))">View</button></div>`).join('');
     }
 
     function renderFriendRequests() {
@@ -1386,24 +1165,12 @@
         const badge = document.getElementById('req-badge');
         badge.innerText = reqList.length;
         badge.style.display = reqList.length > 0 ? "block" : "none";
-
         const container = document.getElementById('friend-reqs-section');
         if (reqList.length === 0) { container.innerHTML = ""; return; }
-        container.innerHTML = `<h3 style="margin-left:5px; margin-top: 10px;">Friend Requests</h3>` + reqList.map(u => `
-            <div class="card" style="display:flex; align-items:center; gap:12px; border-left: 4px solid var(--blue);">
-                <img src="${u.av}" style="width:55px; height:55px; border-radius:50%; object-fit:cover;">
-                <div style="flex:1;">
-                    <b style="font-size: 15px;">${u.n}</b>
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button class="btn" style="padding:7px 15px; font-size:12px; height: 32px;" onclick="acceptReq('${u.id}')">Confirm</button>
-                        <button class="btn" style="padding:7px 15px; font-size:12px; height: 32px; background:#eee; color:black; box-shadow: none;" onclick="rejectReq('${u.id}')">Delete</button>
-                    </div>
-                </div>
-            </div>`).join('');
+        container.innerHTML = `<h3 style="margin-left:5px; margin-top: 10px;">Friend Requests</h3>` + reqList.map(u => `<div class="card" style="display:flex; align-items:center; gap:12px; border-left: 4px solid var(--blue);"><img src="${u.av}" style="width:55px; height:55px; border-radius:50%; object-fit:cover;"><div style="flex:1;"><b>${u.n}</b><div style="display:flex; gap:8px; margin-top:8px;"><button class="btn" style="padding:7px 15px; font-size:12px;" onclick="acceptReq('${u.id}')">Confirm</button><button class="btn" style="padding:7px 15px; font-size:12px; background:#eee; color:black;" onclick="rejectReq('${u.id}')">Delete</button></div></div></div>`).join('');
     }
 
     async function acceptReq(uid) {
-        if(!navigator.onLine) return;
         const batch = db.batch();
         batch.update(db.collection("users").doc(curUser.id), { friends: firebase.firestore.FieldValue.arrayUnion(uid) });
         batch.update(db.collection("users").doc(uid), { friends: firebase.firestore.FieldValue.arrayUnion(curUser.id), friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
@@ -1411,7 +1178,6 @@
     }
 
     async function rejectReq(uid) {
-        if(!navigator.onLine) return;
         await db.collection("users").doc(uid).update({ friendReqsSent: firebase.firestore.FieldValue.arrayRemove(curUser.id) });
     }
 
@@ -1423,29 +1189,22 @@
         if(!t && !fImg && !fVid) return;
         
         const btn = document.getElementById('uploadBtn');
-        btn.innerText = "Processing..."; btn.disabled = true;
+        btn.innerText = "Uploading (Doc 1/50)..."; btn.disabled = true;
         
         let imgB64 = fImg ? await compressImg(fImg) : null;
-        let vidB64 = null;
-        try {
-            vidB64 = fVid ? await compressVideo(fVid) : null;
-        } catch(e) {
-            alert(e);
-            btn.innerText = "Post"; btn.disabled = false;
-            return;
+        const postData = { uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, hasVideo: !!fVid, priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() };
+        
+        const docRef = await db.collection("posts").add(postData);
+        if(fVid) {
+            btn.innerText = "Splitting Video into chunks...";
+            await compressAndUploadVideo(fVid, docRef.id);
         }
-
-        await db.collection("posts").add({ 
-            uid: curUser.id, u: curUser.n, av: curUser.av, text: t, img: imgB64, vid: vidB64,
-            priv: document.getElementById('postPriv').value, reacts: [], comments: [], views: [], ts: Date.now() 
-        });
 
         document.getElementById('postTxt').value = ""; document.getElementById('postImg').value = ""; document.getElementById('postVid').value = "";
         btn.innerText = "Post"; btn.disabled = false;
     }
 
     async function changeAv(input) {
-        if(!navigator.onLine) return;
         const file = input.files[0]; if(!file) return;
         const base64 = await compressImg(file, 600, 0.8);
         await db.collection("users").doc(curUser.id).update({ av: base64 });
@@ -1453,28 +1212,22 @@
     }
 
     async function addReaction(pid, emoji) {
-        if(!navigator.onLine) return;
         const post = allPosts.find(p => p.id === pid);
         let reacts = post.reacts || [];
         const idx = reacts.findIndex(r => r.uid === curUser.id);
-        if (idx > -1) { 
-            if (reacts[idx].emoji === emoji) reacts.splice(idx, 1); 
-            else reacts[idx].emoji = emoji; 
-        }
+        if (idx > -1) { if (reacts[idx].emoji === emoji) reacts.splice(idx, 1); else reacts[idx].emoji = emoji; }
         else reacts.push({ uid: curUser.id, emoji: emoji });
         await db.collection("posts").doc(pid).update({ reacts: reacts });
     }
 
     async function addComm(id) {
-        if(!navigator.onLine) return;
         const inp = document.getElementById(`ci-${id}`); if(!inp.value) return;
-        const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now(), replies: [] };
+        const c = { u: curUser.n, av: curUser.av, text: inp.value, ts: Date.now() };
         await db.collection("posts").doc(id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c) });
         inp.value = "";
     }
 
     async function toggleFriend() {
-        if(!navigator.onLine) return;
         const isFriend = (curUser.friends || []).includes(viewingId);
         const isSent = (curUser.friendReqsSent || []).includes(viewingId);
         if(isFriend) { if(confirm("Unfriend?")) {
@@ -1493,38 +1246,15 @@
         document.getElementById('uName').innerHTML = `${u.n}${getTick(u)} ${getStatusDot(u)}`;
         document.getElementById('uAv').src = u.av;
         document.getElementById('uBio').innerText = u.bio;
-        
         const isMe = uid === curUser.id;
-        const isFriend = (curUser.friends || []).includes(uid);
-        
-        if(u.locked && !isMe && !isFriend) {
-            document.getElementById('uMeta').innerHTML = `<div style="color:var(--red); font-weight:bold;">🔒 Profile is Private</div>`;
-            document.getElementById('uPosts').innerHTML = `<div class="card" style="text-align:center; color:var(--gr);">Add ${u.n} to see their posts.</div>`;
-        } else {
-            document.getElementById('uMeta').innerHTML = `<div>🎓 ${cleanXSS(u.edu) || 'No education provided'}</div><div>💼 ${cleanXSS(u.work) || 'No work info'}</div><div>❤️ ${u.status}</div><div>🎂 ${getAge(u.birth)}</div>`;
-            const myPosts = allPosts.filter(p => p.uid === uid);
-            document.getElementById('uPosts').innerHTML = myPosts.map(p => `
-                <div class="card">
-                    <p style="font-size: 15px; line-height: 1.5;">${cleanXSS(p.text)}</p>
-                    ${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}
-                    ${p.vid ? `<video src="${p.vid}" class="p-vid" controls preload="auto" playsinline style="will-change: transform; transform: translateZ(0);"></video>` : ''}
-                    <div style="font-size:11px; color:#999; margin-top:8px; font-weight: 500;">${fmtTime(p.ts)} • ${p.priv}</div>
-                </div>`).join('');
-        }
-        
+        document.getElementById('uMeta').innerHTML = `<div>🎓 ${cleanXSS(u.edu) || 'No education'}</div><div>💼 ${cleanXSS(u.work) || 'No work'}</div><div>❤️ ${u.status}</div><div>🎂 ${getAge(u.birth)}</div>`;
+        const myPosts = allPosts.filter(p => p.uid === uid);
+        document.getElementById('uPosts').innerHTML = myPosts.map(p => `<div class="card"><p style="font-size: 15px;">${cleanXSS(p.text)}</p>${p.img?`<img src="${p.img}" class="p-img" onclick="viewImage(this.src)">`:''}<div style="font-size:11px; color:#999; margin-top:8px;">${fmtTime(p.ts)} • ${p.priv}</div></div>`).join('');
         document.getElementById('upBtn').style.display = isMe ? 'flex' : 'none';
         document.getElementById('editBioBtn').style.display = isMe ? 'block' : 'none';
         document.getElementById('msgBtn').style.display = isMe ? 'none' : 'block';
-        
         const fBtn = document.getElementById('addFriendBtn');
-        if(!isMe) {
-            fBtn.style.display = 'block';
-            const isF = (curUser.friends || []).includes(uid);
-            const isS = (curUser.friendReqsSent || []).includes(uid);
-            fBtn.innerText = isF ? "Friends" : (isS ? "Requested" : "Add Friend");
-            fBtn.style.background = isF ? "#eee" : "var(--blue)";
-            fBtn.style.color = isF ? "black" : "white";
-        } else fBtn.style.display = 'none';
+        if(!isMe) { fBtn.style.display = 'block'; const isF = (curUser.friends || []).includes(uid); const isS = (curUser.friendReqsSent || []).includes(uid); fBtn.innerText = isF ? "Friends" : (isS ? "Requested" : "Add Friend"); } else fBtn.style.display = 'none';
     }
 
     function openEditModal() {
@@ -1536,59 +1266,25 @@
     }
 
     async function saveProfile() {
-        if(!navigator.onLine) return;
-        await db.collection("users").doc(curUser.id).update({
-            bio: cleanXSS(document.getElementById('eBio').value),
-            edu: cleanXSS(document.getElementById('eEdu').value),
-            work: cleanXSS(document.getElementById('eWork').value),
-            status: document.getElementById('eStatus').value
-        });
+        await db.collection("users").doc(curUser.id).update({ bio: cleanXSS(document.getElementById('eBio').value), edu: cleanXSS(document.getElementById('eEdu').value), work: cleanXSS(document.getElementById('eWork').value), status: document.getElementById('eStatus').value });
         document.getElementById('editModal').style.display = 'none';
     }
 
-    async function deletePost(pid) { if(confirm("Delete this post?")) await db.collection("posts").doc(pid).delete(); }
+    async function deletePost(pid) { if(confirm("Delete?")) await db.collection("posts").doc(pid).delete(); }
     function toggleAuth(s) { document.getElementById('loginUI').style.display = s ? 'none' : 'block'; document.getElementById('regUI').style.display = s ? 'block' : 'none'; }
-    function toggleComms(id) { 
-        const c = document.getElementById(`cBox-${id}`); 
-        c.style.display = c.style.display==='none'?'block':'none'; 
-        if(c.style.display==='block') {
-            c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-    }
-    function go(id, el) {
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('v-on'));
-        document.getElementById(id).classList.add('v-on');
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('t-on'));
-        if(el) el.classList.add('t-on');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    function toggleComms(id) { const c = document.getElementById(`cBox-${id}`); c.style.display = c.style.display==='none'?'block':'none'; }
+    function go(id, el) { document.querySelectorAll('.view').forEach(v => v.classList.remove('v-on')); document.getElementById(id).classList.add('v-on'); document.querySelectorAll('.tab').forEach(t => t.classList.remove('t-on')); if(el) el.classList.add('t-on'); window.scrollTo(0,0); }
 
     function renderChats() {
-        const chatList = document.getElementById('chats-list');
         const friends = allUsers.filter(u => (curUser.friends || []).includes(u.id));
-        
-        chatList.innerHTML = friends.map(u => `
-            <div class="chat-item" onclick="openChat('${u.id}')">
-                <div style="position:relative">
-                    <img src="${u.av}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;">
-                    <div style="position:absolute; bottom:0; right:0;">${getStatusDot(u)}</div>
-                </div>
-                <div style="flex:1">
-                    <b>${u.n}${getTick(u)}</b>
-                    <div style="font-size:12px; color:var(--gr);">Tap to start chatting</div>
-                </div>
-            </div>
-        `).join('') || `<p style="padding:20px; color:var(--gr); text-align:center;">Add friends to start messaging!</p>`;
+        document.getElementById('chats-list').innerHTML = friends.map(u => `<div class="chat-item" onclick="openChat('${u.id}')"><div style="position:relative"><img src="${u.av}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;"><div style="position:absolute; bottom:0; right:0;">${getStatusDot(u)}</div></div><div style="flex:1"><b>${u.n}${getTick(u)}</b><div style="font-size:12px; color:var(--gr);">Tap to start chatting</div></div></div>`).join('');
     }
 
     async function handleTyping() {
-        if(!navigator.onLine) return;
         const chatId = [curUser.id, activeChatId].sort().join('_');
         await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: true }, { merge: true });
         clearTimeout(window.typingTimer);
-        window.typingTimer = setTimeout(async () => {
-            await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: false }, { merge: true });
-        }, 2000);
+        window.typingTimer = setTimeout(async () => { await db.collection("chats").doc(chatId).set({ [`typing_${curUser.id}`]: false }, { merge: true }); }, 2000);
     }
 
     function openChat(uid) {
@@ -1597,176 +1293,34 @@
         document.getElementById('chatAv').src = target.av;
         document.getElementById('chatName').innerText = target.n;
         document.getElementById('chat-window').style.display = 'flex';
-        
-        const savedTheme = localStorage.getItem(`chat_theme_${uid}`) || '';
-        document.getElementById('chat-window').className = savedTheme;
-
-        if (!navigator.onLine) {
-            document.getElementById('chatBody').innerHTML = `<p style="text-align:center; padding:20px; color:var(--gr);">Messenger requires internet connection.</p>`;
-            return;
-        }
-
         const chatId = [curUser.id, uid].sort().join('_');
         if(unsubMsgs) unsubMsgs();
-        if(unsubPresence) unsubPresence();
-
-        unsubPresence = db.collection("chats").doc(chatId).onSnapshot(doc => {
-            const data = doc.data();
-            const isTyping = data && data[`typing_${uid}`];
-            document.getElementById('typingIndicator').style.display = isTyping ? 'block' : 'none';
-            document.getElementById('chatStatus').innerText = target.lastSeen && (Date.now() - target.lastSeen < 300000) ? "Active now" : "Offline";
-        });
-
         unsubMsgs = db.collection("chats").doc(chatId).collection("messages").orderBy("ts", "asc").onSnapshot(s => {
             const msgs = s.docs.map(d => ({id: d.id, ...d.data()}));
-            const body = document.getElementById('chatBody');
-            
-            let headerImg = msgs.length === 0 ? `<div style="text-align:center; padding:20px;"><img src="${msgAssets.banner}" style="width:100%; border-radius:15px; margin-bottom:10px; opacity:0.8;"><p style="font-size:12px; color:var(--gr);">Say hello to ${target.n}!</p></div>` : '';
-
-            body.innerHTML = headerImg + msgs.map((m, idx) => {
-                const isMe = m.sender === curUser.id;
-                const showSeen = isMe && idx === msgs.length - 1 && m.seen;
-                return `
-                <div class="msg-bubble ${isMe ? 'msg-sent' : 'msg-recv'}" 
-                     onmousedown="handleTouchStart(event, '${m.id}', '${m.sender}')" 
-                     ontouchstart="handleTouchStart(event, '${m.id}', '${m.sender}')"
-                     onmouseup="handleTouchEnd()"
-                     ontouchend="handleTouchEnd()"
-                     oncontextmenu="event.preventDefault(); showMsgMenu(event, '${m.id}', '${m.sender}')">
-                    ${m.text ? cleanXSS(m.text) : ''}
-                    ${m.img ? `<img src="${m.img}" class="msg-img" onclick="viewImage(this.src)">` : ''}
-                </div>
-                ${showSeen ? `<div class="seen-receipt">Seen</div>` : ''}
-            `}).join('');
-            body.scrollTop = body.scrollHeight;
-
-            s.docs.forEach(d => {
-                if(d.data().sender !== curUser.id && !d.data().seen) {
-                    db.collection("chats").doc(chatId).collection("messages").doc(d.id).update({ seen: true });
-                }
-            });
+            document.getElementById('chatBody').innerHTML = msgs.map(m => `<div class="msg-bubble ${m.sender === curUser.id ? 'msg-sent' : 'msg-recv'}">${m.text ? cleanXSS(m.text) : ''}${m.img ? `<img src="${m.img}" class="msg-img" onclick="viewImage(this.src)">` : ''}</div>`).join('');
+            document.getElementById('chatBody').scrollTop = 99999;
         });
     }
 
-    /* Tap and Hold Logic */
-    function handleTouchStart(e, id, sender) {
-        longPressTimer = setTimeout(() => {
-            showMsgMenu(e, id, sender);
-        }, 600);
-    }
-
-    function handleTouchEnd() {
-        clearTimeout(longPressTimer);
-    }
-
-    function showMsgMenu(e, id, sender) {
-        if(e) e.preventDefault();
-        selectedMsgId = id;
-        selectedMsgSender = sender;
-        const menu = document.getElementById('msgMenu');
-        const unsendOpt = document.getElementById('unsendOpt');
-
-        unsendOpt.style.display = (sender === curUser.id) ? 'flex' : 'none';
-
-        let x, y;
-        if (e && e.touches && e.touches.length > 0) {
-            x = e.touches[0].clientX;
-            y = e.touches[0].clientY;
-        } else if (e && e.clientX) {
-            x = e.clientX;
-            y = e.clientY;
-        } else {
-            x = window.innerWidth / 2 - 90;
-            y = window.innerHeight / 2 - 100;
-        }
-
-        if (x + 190 > window.innerWidth) x = window.innerWidth - 190;
-        if (y + 220 > window.innerHeight) y = window.innerHeight - 230;
-        if (x < 10) x = 10;
-        if (y < 10) y = 10;
-
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
-        menu.style.display = 'flex';
-
-        if (window.navigator.vibrate) window.navigator.vibrate(40);
-    }
-
-    function closeMsgMenu() {
-        document.getElementById('msgMenu').style.display = 'none';
-    }
-
-    async function menuAction(type) {
-        if (!selectedMsgId || !navigator.onLine) return;
-        const chatId = [curUser.id, activeChatId].sort().join('_');
-        
-        switch(type) {
-            case 'unsend':
-                if(confirm("Unsend message for everyone?")) {
-                    await db.collection("chats").doc(chatId).collection("messages").doc(selectedMsgId).delete();
-                }
-                break;
-            case 'deleteMe':
-                if(confirm("Delete message for you?")) {
-                    const el = document.querySelector(`[onmousedown*="${selectedMsgId}"]`);
-                    if(el) el.parentElement.style.display = 'none';
-                }
-                break;
-            case 'reply':
-                document.getElementById('mInp').focus();
-                document.getElementById('mInp').placeholder = "Replying to message...";
-                break;
-            case 'forward':
-                alert("Select a friend to forward this message.");
-                break;
-            case 'pin':
-                alert("Message pinned.");
-                break;
-        }
-        closeMsgMenu();
-    }
-
-    function setChatTheme(themeName) {
-        document.getElementById('chat-window').className = themeName;
-        if(activeChatId) localStorage.setItem(`chat_theme_${activeChatId}`, themeName);
-        document.getElementById('themeModal').style.display = 'none';
-    }
-
-    function closeChat() {
-        document.getElementById('chat-window').style.display = 'none';
-        if(unsubMsgs) unsubMsgs();
-        if(unsubPresence) unsubPresence();
-        activeChatId = null;
-    }
+    function closeChat() { document.getElementById('chat-window').style.display = 'none'; if(unsubMsgs) unsubMsgs(); }
 
     async function sendMsg() {
-        if(!navigator.onLine) return;
-        const inp = document.getElementById('mInp');
-        const txt = inp.value.trim();
+        const inp = document.getElementById('mInp'), txt = inp.value.trim();
         if(!txt || !activeChatId) return;
-        
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        await db.collection("chats").doc(chatId).collection("messages").add({
-            sender: curUser.id, text: txt, ts: Date.now(), seen: false
-        });
+        await db.collection("chats").doc(chatId).collection("messages").add({ sender: curUser.id, text: txt, ts: Date.now(), seen: false });
         inp.value = "";
-        inp.placeholder = "Type a message...";
     }
 
     async function sendImgMsg() {
-        if(!navigator.onLine) return;
         const file = document.getElementById('msgImgInp').files[0];
         if(!file || !activeChatId) return;
         const b64 = await compressImg(file, 600, 0.7);
         const chatId = [curUser.id, activeChatId].sort().join('_');
-        await db.collection("chats").doc(chatId).collection("messages").add({
-            sender: curUser.id, img: b64, ts: Date.now(), seen: false
-        });
+        await db.collection("chats").doc(chatId).collection("messages").add({ sender: curUser.id, img: b64, ts: Date.now(), seen: false });
     }
 
-    function startChatFromProfile() {
-        openChat(viewingId);
-    }
+    function startChatFromProfile() { openChat(viewingId); }
 </script>
 </body>
 </html>

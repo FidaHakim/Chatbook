@@ -906,12 +906,10 @@
 
     async function compressVideo(file) {
         return new Promise(async (resolve, reject) => {
-            // For Chatbook Pro: Low quality focus to allow full duration
             const video = document.createElement('video');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Fallback for browsers without MediaRecorder
             if (!window.MediaRecorder || !canvas.captureStream) {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
@@ -924,16 +922,17 @@
             video.playsInline = true;
 
             video.onloadedmetadata = () => {
-                // Resize to low res (360p or lower) for smaller data footprint
-                const targetHeight = 360;
+                // Set target resolution to 300p height
+                const targetHeight = 300;
                 const scale = Math.min(1, targetHeight / video.videoHeight);
                 canvas.width = video.videoWidth * scale;
                 canvas.height = video.videoHeight * scale;
 
-                const stream = canvas.captureStream(20); // 20fps for better compression
+                // Capture stream at 25fps as requested
+                const stream = canvas.captureStream(25); 
                 const recorder = new MediaRecorder(stream, { 
                     mimeType: 'video/webm;codecs=vp8',
-                    videoBitsPerSecond: 400000 // Very low bitrate to save space
+                    videoBitsPerSecond: 350000 // Low bitrate for efficient storage
                 });
                 
                 const chunks = [];

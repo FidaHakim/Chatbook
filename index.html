@@ -918,7 +918,7 @@
             }
 
             video.src = URL.createObjectURL(file);
-            video.muted = true;
+            video.muted = false; // Enabled sound for processing
             video.playsInline = true;
 
             video.onloadedmetadata = () => {
@@ -930,6 +930,16 @@
 
                 // Capture stream at 16fps for smaller file size
                 const stream = canvas.captureStream(16); 
+                
+                // Add original audio tracks to the canvas stream if they exist
+                if (video.captureStream) {
+                    const audioStream = video.captureStream();
+                    audioStream.getAudioTracks().forEach(track => stream.addTrack(track));
+                } else if (video.mozCaptureStream) {
+                    const audioStream = video.mozCaptureStream();
+                    audioStream.getAudioTracks().forEach(track => stream.addTrack(track));
+                }
+
                 const recorder = new MediaRecorder(stream, { 
                     mimeType: 'video/webm;codecs=vp8',
                     videoBitsPerSecond: 180000 // Very low bitrate to hit ~1MB target
